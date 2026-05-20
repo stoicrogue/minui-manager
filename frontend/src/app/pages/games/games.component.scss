@@ -204,19 +204,10 @@
 }
 
 .badges {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  pointer-events: none;
-
-  // Re-enable pointer events on the chips themselves so tooltips work.
-  > * {
-    pointer-events: auto;
-  }
+  margin-top: 10px;
 }
 
 .badge {
@@ -230,22 +221,22 @@
   text-transform: uppercase;
 
   &.code {
-    background: rgba(13, 5, 33, 0.85) !important;
+    background: rgba(0, 240, 255, 0.1) !important;
     color: var(--sw-cyan) !important;
-    border: 1px solid rgba(0, 240, 255, 0.5) !important;
-    box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+    border: 1px solid rgba(0, 240, 255, 0.45) !important;
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.18);
   }
 
   &.save {
-    background: rgba(13, 5, 33, 0.85) !important;
+    background: rgba(120, 255, 153, 0.08) !important;
     color: #b6ffc1 !important;
-    border: 1px solid rgba(120, 255, 153, 0.4) !important;
+    border: 1px solid rgba(120, 255, 153, 0.35) !important;
   }
 
   &.warn {
-    background: rgba(13, 5, 33, 0.85) !important;
+    background: rgba(255, 184, 0, 0.08) !important;
     color: #ffd566 !important;
-    border: 1px solid rgba(255, 184, 0, 0.55) !important;
+    border: 1px solid rgba(255, 184, 0, 0.5) !important;
   }
 }
 
@@ -254,7 +245,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-height: 60px;
 
   .title {
     color: var(--sw-text);

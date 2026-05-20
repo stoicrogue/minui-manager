@@ -91,6 +91,12 @@
                   <span>No art</span>
                 </div>
               }
+            </div>
+            <mat-card-content class="meta">
+              <div class="title" [title]="game.display_name">{{ game.display_name }}</div>
+              @if (game.rom_filename) {
+                <div class="rom-name" [title]="game.rom_filename">{{ game.rom_filename }}</div>
+              }
               <div class="badges">
                 <mat-chip class="badge code">{{ game.system_code }}</mat-chip>
                 @if (game.has_save) {
@@ -109,12 +115,6 @@
                   </mat-chip>
                 }
               </div>
-            </div>
-            <mat-card-content class="meta">
-              <div class="title" [title]="game.display_name">{{ game.display_name }}</div>
-              @if (game.rom_filename) {
-                <div class="rom-name" [title]="game.rom_filename">{{ game.rom_filename }}</div>
-              }
             </mat-card-content>
           </mat-card>
         }
