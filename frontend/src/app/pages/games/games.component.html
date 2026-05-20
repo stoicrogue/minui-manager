@@ -1,0 +1,131 @@
+<div class="games-page">
+  <header class="games-header">
+    <h1>On Card</h1>
+    @if (listing(); as l) {
+      <div class="slot-count" [attr.data-state]="capacityState()">
+        <mat-icon>sd_card</mat-icon>
+        <span class="count">{{ slotCountLabel() }}</span>
+        <span class="label">games</span>
+      </div>
+    }
+    <span class="spacer"></span>
+    <button mat-stroked-button (click)="refresh()" [disabled]="loading()">
+      @if (loading()) {
+        <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+      } @else {
+        <mat-icon>refresh</mat-icon>
+      }
+      Refresh
+    </button>
+  </header>
+
+  @if (notReady(); as nr) {
+    <mat-card appearance="outlined" class="banner banner-warn">
+      <mat-card-content>
+        <div class="banner-row">
+          <mat-icon>warning</mat-icon>
+          <div>
+            <strong>SD card isn't ready.</strong>
+            <p>{{ nr.message }}</p>
+          </div>
+          <a mat-flat-button color="primary" routerLink="/settings">
+            <mat-icon>settings</mat-icon>
+            Go to Settings
+          </a>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  @if (!notReady() && genericError(); as err) {
+    <mat-card appearance="outlined" class="banner banner-warn">
+      <mat-card-content>
+        <div class="banner-row">
+          <mat-icon>error</mat-icon>
+          <div>
+            <strong>Couldn't load games.</strong>
+            <p>{{ err }}</p>
+          </div>
+          <button mat-stroked-button (click)="refresh()">Retry</button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  @if (!notReady() && !genericError() && listing(); as l) {
+    @if (l.summary.malformed > 0) {
+      <p class="summary-malformed">
+        <mat-icon>error_outline</mat-icon>
+        {{ l.summary.malformed }} malformed game{{ l.summary.malformed === 1 ? '' : 's' }} —
+        check the warning badges below.
+      </p>
+    }
+
+    @if (l.games.length === 0) {
+      <div class="empty">
+        <mat-icon>videogame_asset_off</mat-icon>
+        <h2>No games on the card</h2>
+        <p>
+          Once Phase 3 lands, you'll be able to upload ROMs to your library and send them here.
+        </p>
+      </div>
+    } @else {
+      <div class="game-grid">
+        @for (game of l.games; track game.game_folder_name) {
+          <mat-card
+            appearance="outlined"
+            class="game-card"
+            [class.malformed]="game.is_malformed"
+          >
+            <div class="art-wrapper">
+              @if (game.has_boxart) {
+                <img
+                  class="art"
+                  [src]="boxArt(game)"
+                  [alt]="game.display_name + ' box art'"
+                  loading="lazy"
+                />
+              } @else {
+                <div class="art art-placeholder">
+                  <mat-icon>image_not_supported</mat-icon>
+                  <span>No art</span>
+                </div>
+              }
+              <div class="badges">
+                <mat-chip class="badge code">{{ game.system_code }}</mat-chip>
+                @if (game.has_save) {
+                  <mat-chip class="badge save" matTooltip="Save file present">
+                    <mat-icon matChipAvatar>save</mat-icon>
+                    Save
+                  </mat-chip>
+                }
+                @if (game.is_malformed) {
+                  <mat-chip
+                    class="badge warn"
+                    [matTooltip]="game.malformed_reason || 'Malformed entry'"
+                  >
+                    <mat-icon matChipAvatar>warning</mat-icon>
+                    Malformed
+                  </mat-chip>
+                }
+              </div>
+            </div>
+            <mat-card-content class="meta">
+              <div class="title" [title]="game.display_name">{{ game.display_name }}</div>
+              @if (game.rom_filename) {
+                <div class="rom-name" [title]="game.rom_filename">{{ game.rom_filename }}</div>
+              }
+            </mat-card-content>
+          </mat-card>
+        }
+      </div>
+    }
+  }
+
+  @if (!notReady() && !genericError() && !listing() && loading()) {
+    <div class="loading">
+      <mat-progress-spinner mode="indeterminate" diameter="40"></mat-progress-spinner>
+      <p>Reading SD card…</p>
+    </div>
+  }
+</div>

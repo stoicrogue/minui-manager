@@ -1,0 +1,124 @@
+# Supported systems. Mirrors plan Section 4.
+#
+# - code: the emulator code that appears in the folder suffix, e.g. "(GB)".
+#   Case-sensitive.
+# - display_name: shown in the UI; also used to seed a default display name
+#   when adding a game from a file with no parenthesized code.
+# - extensions: ROM extensions associated with this code. Used by the
+#   system detector (Phase 3) and the reader (sanity-check that the file
+#   the m3u points at has an expected extension).
+# - libretro_repo: the libretro-thumbnails repo name for this system,
+#   used by the box-art search in Phase 4. Null for systems without
+#   thumbnail coverage (Pico-8).
+# - extension_preference: tiebreaker for the auto-detector when multiple
+#   codes claim the same extension (e.g. .gba could be GBA or MGBA;
+#   prefer GBA). Higher wins. Phase 3 uses this.
+
+systems:
+  - code: FC
+    display_name: Nintendo Entertainment System
+    extensions: [.nes, .fds]
+    libretro_repo: Nintendo_-_Nintendo_Entertainment_System
+    extension_preference: 10
+
+  - code: GB
+    display_name: Game Boy
+    extensions: [.gb]
+    libretro_repo: Nintendo_-_Game_Boy
+    extension_preference: 10
+
+  - code: GBC
+    display_name: Game Boy Color
+    extensions: [.gbc]
+    libretro_repo: Nintendo_-_Game_Boy_Color
+    extension_preference: 10
+
+  - code: GBA
+    display_name: Game Boy Advance
+    extensions: [.gba]
+    libretro_repo: Nintendo_-_Game_Boy_Advance
+    extension_preference: 10
+
+  - code: MGBA
+    display_name: Game Boy Advance (mGBA core)
+    extensions: [.gba]
+    libretro_repo: Nintendo_-_Game_Boy_Advance
+    extension_preference: 5
+
+  - code: SFC
+    display_name: Super Nintendo
+    extensions: [.sfc, .smc]
+    libretro_repo: Nintendo_-_Super_Nintendo_Entertainment_System
+    extension_preference: 10
+
+  - code: SUPA
+    display_name: Super Nintendo (alt core)
+    extensions: [.sfc, .smc]
+    libretro_repo: Nintendo_-_Super_Nintendo_Entertainment_System
+    extension_preference: 5
+
+  - code: SGB
+    display_name: Super Game Boy
+    extensions: [.gb, .gbc]
+    libretro_repo: Nintendo_-_Game_Boy
+    extension_preference: 3
+
+  - code: VB
+    display_name: Virtual Boy
+    extensions: [.vb]
+    libretro_repo: Nintendo_-_Virtual_Boy
+    extension_preference: 10
+
+  - code: PKM
+    display_name: "Pokémon mini"
+    extensions: [.min]
+    libretro_repo: Nintendo_-_Pokemon_Mini
+    extension_preference: 10
+
+  - code: MD
+    display_name: Sega Genesis
+    extensions: [.md, .gen, .bin]
+    libretro_repo: Sega_-_Mega_Drive_-_Genesis
+    extension_preference: 10
+
+  - code: SMS
+    display_name: Sega Master System
+    extensions: [.sms]
+    libretro_repo: Sega_-_Master_System_-_Mark_III
+    extension_preference: 10
+
+  - code: GG
+    display_name: Sega Game Gear
+    extensions: [.gg]
+    libretro_repo: Sega_-_Game_Gear
+    extension_preference: 10
+
+  - code: PCE
+    display_name: TurboGrafx-16
+    extensions: [.pce, .chd]
+    libretro_repo: NEC_-_PC_Engine_-_TurboGrafx_16
+    extension_preference: 10
+
+  - code: PS
+    display_name: Sony PlayStation
+    extensions: [.chd, .pbp, .cue]
+    libretro_repo: Sony_-_PlayStation
+    extension_preference: 10
+
+  - code: NGP
+    display_name: Neo Geo Pocket
+    extensions: [.ngp]
+    libretro_repo: SNK_-_Neo_Geo_Pocket
+    extension_preference: 5
+
+  - code: NGPC
+    display_name: Neo Geo Pocket Color
+    extensions: [.ngc, .ngp]
+    libretro_repo: SNK_-_Neo_Geo_Pocket_Color
+    extension_preference: 10
+
+  - code: P8
+    display_name: Pico-8
+    extensions: [.p8, .png]
+    libretro_repo: null
+    extension_preference: 1
