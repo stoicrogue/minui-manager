@@ -1,0 +1,73 @@
+.settings-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+
+  h1 {
+    margin: 0 0 24px;
+    font-size: 28px;
+    font-weight: 500;
+  }
+}
+
+.card {
+  margin-bottom: 24px;
+}
+
+.full-width {
+  width: 100%;
+  max-width: 480px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.divider {
+  margin: 20px 0;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+
+  .status-detail {
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 14px;
+  }
+}
+
+.missing {
+  margin-top: 16px;
+
+  strong {
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .hint {
+    margin-top: 12px;
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.9em;
+}

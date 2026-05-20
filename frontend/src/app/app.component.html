@@ -1,0 +1,15 @@
+<mat-toolbar color="primary" class="app-toolbar">
+  <mat-icon class="app-logo">videogame_asset</mat-icon>
+  <span class="app-title">{{ title }}</span>
+  <span class="spacer"></span>
+  <a mat-button routerLink="/settings" routerLinkActive="active">
+    <mat-icon>settings</mat-icon>
+    Settings
+  </a>
+  <!-- Phase 2: <a mat-button routerLink="/games">On card</a>
+       Phase 3: <a mat-button routerLink="/library">Library</a> -->
+</mat-toolbar>
+
+<main class="app-main">
+  <router-outlet></router-outlet>
+</main>

@@ -1,0 +1,109 @@
+<div class="settings-page">
+  <h1>Settings</h1>
+
+  <mat-card appearance="outlined" class="card">
+    <mat-card-header>
+      <mat-card-title>SD card</mat-card-title>
+      <mat-card-subtitle>
+        Point at the SD card from your Miyoo Mini Plus. On Windows this is typically
+        a drive letter like <code>D:\</code>.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>SD card path</mat-label>
+        <input
+          matInput
+          [ngModel]="sdPathInput()"
+          (ngModelChange)="sdPathInput.set($event)"
+          placeholder="D:\"
+          (keyup.enter)="saveSDPath()"
+        />
+        <mat-icon matSuffix>folder_open</mat-icon>
+      </mat-form-field>
+
+      <div class="actions">
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="saveSDPath()"
+          [disabled]="saving()"
+        >
+          @if (saving()) {
+            <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+          } @else {
+            <mat-icon>save</mat-icon>
+          }
+          Save &amp; verify
+        </button>
+        <button mat-button (click)="refresh()" [disabled]="loading()">
+          <mat-icon>refresh</mat-icon>
+          Refresh
+        </button>
+      </div>
+
+      <mat-divider class="divider"></mat-divider>
+
+      @if (status(); as s) {
+        <div class="status-row">
+          <mat-chip [color]="statusColor(s.status)" highlighted>
+            <mat-icon matChipAvatar>{{ statusIcon(s.status) }}</mat-icon>
+            {{ statusLabel(s.status) }}
+          </mat-chip>
+          <span class="status-detail">{{ s.detail }}</span>
+        </div>
+
+        @if (s.missing_markers && s.missing_markers.length > 0) {
+          <div class="missing">
+            <strong>Missing markers:</strong>
+            <mat-chip-set>
+              @for (m of s.missing_markers; track m) {
+                <mat-chip>{{ m }}</mat-chip>
+              }
+            </mat-chip-set>
+            <p class="hint">
+              A valid MinUI SD card has both a <code>.system/</code> folder and an
+              <code>Emus/</code> folder at its root. Plug in the card, make sure the
+              drive letter is correct, and try again.
+            </p>
+          </div>
+        }
+      } @else if (loading()) {
+        <div class="status-row">
+          <mat-progress-spinner mode="indeterminate" diameter="20"></mat-progress-spinner>
+          <span>Checking…</span>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card appearance="outlined" class="card">
+    <mat-card-header>
+      <mat-card-title>Slot cap</mat-card-title>
+      <mat-card-subtitle>
+        How many games should the device hold at once? The "Five Game Handheld"
+        layout's spirit is a small curated library — default is 10.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <mat-form-field appearance="outline">
+        <mat-label>Max games on card</mat-label>
+        <input
+          matInput
+          type="number"
+          min="1"
+          [ngModel]="slotCapInput()"
+          (ngModelChange)="slotCapInput.set($event)"
+        />
+      </mat-form-field>
+      <div class="actions">
+        <button mat-flat-button color="primary" (click)="saveSlotCap()" [disabled]="saving()">
+          <mat-icon>save</mat-icon>
+          Save
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

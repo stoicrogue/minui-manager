@@ -1,0 +1,33 @@
+.app-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.app-logo {
+  font-size: 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.app-title {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.app-main {
+  background: #fafafa;
+  min-height: calc(100vh - 64px);
+}
+
+a[mat-button].active {
+  background: rgba(255, 255, 255, 0.12);
+}
