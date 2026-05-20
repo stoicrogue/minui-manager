@@ -1,4 +1,9 @@
-"""FastAPI app entry point. Phase 1: settings + SD card status."""
+"""FastAPI app entry point.
+
+Phase 1: settings + SD card status.
+Phase 2: SD card games + orphan art + box art streaming.
+Phase 3: library upload + system detection + library CRUD.
+"""
 
 from __future__ import annotations
 
@@ -8,14 +13,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db import init_db
 from app.paths import ensure_data_dirs
-from app.routers import sdcard, settings
+from app.routers import library, sdcard, settings
+from app.services.library_store import cleanup_stale_drafts
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # Make sure ./data/ exists so the first PATCH /api/settings succeeds.
     ensure_data_dirs()
+    init_db()
+    cleanup_stale_drafts()
     yield
 
 
@@ -26,9 +34,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Local Angular dev server runs on :4200; allow it during development.
-# Once `make run` builds the static bundle and serves it from FastAPI directly,
-# this becomes a no-op.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4200"],
@@ -45,3 +50,4 @@ def health() -> dict[str, str]:
 
 app.include_router(settings.router)
 app.include_router(sdcard.router)
+app.include_router(library.router)

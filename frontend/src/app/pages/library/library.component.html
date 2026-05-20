@@ -1,0 +1,126 @@
+<div
+  class="library-page"
+  [class.drag-over]="dragOver()"
+  (dragover)="onPageDragOver($event)"
+  (dragleave)="onPageDragLeave($event)"
+  (drop)="onPageDrop($event)"
+>
+  <header class="library-header">
+    <h1>Library</h1>
+    @if (games().length > 0) {
+      <div class="count-pill">
+        <mat-icon>inventory_2</mat-icon>
+        <span class="count">{{ games().length }}</span>
+        <span class="label">games</span>
+      </div>
+    }
+    <span class="spacer"></span>
+    <button mat-stroked-button (click)="refresh()" [disabled]="loading()">
+      @if (loading()) {
+        <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+      } @else {
+        <mat-icon>refresh</mat-icon>
+      }
+      Refresh
+    </button>
+    <button mat-flat-button color="primary" (click)="openUpload()">
+      <mat-icon>upload</mat-icon>
+      Upload ROM
+    </button>
+  </header>
+
+  @if (errorMessage(); as err) {
+    <mat-card appearance="outlined" class="banner banner-warn">
+      <mat-card-content>
+        <div class="banner-row">
+          <mat-icon>error</mat-icon>
+          <div>
+            <strong>Couldn't load the library.</strong>
+            <p>{{ err }}</p>
+          </div>
+          <button mat-stroked-button (click)="refresh()">Retry</button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  }
+
+  @if (systemFilters().length > 1) {
+    <div class="filters">
+      <mat-chip-set>
+        <mat-chip
+          [class.active]="activeFilter() === null"
+          (click)="setFilter(null)"
+        >
+          All ({{ games().length }})
+        </mat-chip>
+        @for (code of systemFilters(); track code) {
+          <mat-chip
+            [class.active]="activeFilter() === code"
+            (click)="setFilter(code)"
+          >
+            {{ code }}
+          </mat-chip>
+        }
+      </mat-chip-set>
+    </div>
+  }
+
+  @if (games().length === 0 && !loading() && !errorMessage()) {
+    <div class="empty">
+      <mat-icon>folder_open</mat-icon>
+      <h2>Your library is empty</h2>
+      <p>Upload a ROM to get started. You can also drag a file anywhere on this page.</p>
+      <button mat-flat-button color="primary" (click)="openUpload()">
+        <mat-icon>upload</mat-icon>
+        Upload ROM
+      </button>
+    </div>
+  } @else if (visibleGames().length > 0) {
+    <div class="game-grid">
+      @for (game of visibleGames(); track game.id) {
+        <mat-card appearance="outlined" class="library-card">
+          <div class="art-wrapper">
+            @if (game.has_boxart) {
+              <!-- Phase 5 will populate art; for now show placeholder. -->
+              <div class="art art-placeholder">
+                <mat-icon>image</mat-icon>
+                <span>Art</span>
+              </div>
+            } @else {
+              <div class="art art-placeholder">
+                <mat-icon>image_not_supported</mat-icon>
+                <span>No art yet</span>
+              </div>
+            }
+          </div>
+          <mat-card-content class="meta">
+            <div class="title" [title]="game.display_name">{{ game.display_name }}</div>
+            <div class="rom-name" [title]="game.rom_filename">{{ game.rom_filename }}</div>
+            <div class="info-row">
+              <span class="size">{{ prettySize(game.size_bytes) }}</span>
+            </div>
+            <div class="badges">
+              <mat-chip class="badge code">{{ game.system_code }}</mat-chip>
+              <span class="actions-spacer"></span>
+              <button
+                mat-icon-button
+                class="delete-btn"
+                (click)="remove(game)"
+                matTooltip="Remove from library"
+              >
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      }
+    </div>
+  }
+
+  @if (dragOver()) {
+    <div class="drop-overlay">
+      <mat-icon>file_download</mat-icon>
+      <p>Drop ROM to upload</p>
+    </div>
+  }
+</div>

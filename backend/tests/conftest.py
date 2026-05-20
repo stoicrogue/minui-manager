@@ -5,29 +5,52 @@ so tests never touch the real ./data/ directory.
 from __future__ import annotations
 
 import importlib
-import os
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+# Order matters: reload paths/db FIRST, then services that depend on them,
+# then routers that import those services, then main which mounts the routers.
+_RELOAD_ORDER = (
+    "app.paths",
+    "app.config",
+    "app.db",
+    "app.models",
+    "app.services.system_registry",
+    "app.services.system_detector",
+    "app.services.sdcard_validator",
+    "app.services.sdcard_reader",
+    "app.services.folder_picker",
+    "app.services.library_store",
+    "app.routers.settings",
+    "app.routers.sdcard",
+    "app.routers.library",
+    "app.main",
+)
+
 
 @pytest.fixture
 def tmp_project_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """Point the app's data dir at a tmp directory for the duration of the test."""
+    """Point the app's data dir at a tmp directory for the test.
+
+    Reloads every app module that holds path-dependent state, in
+    dependency order, so the cached ``app.main`` from earlier tests
+    doesn't keep router functions wired to a stale data directory.
+    """
     monkeypatch.setenv("MINUI_MANAGER_ROOT", str(tmp_path))
 
-    # The paths module reads the env var at import time, so reload it (and
-    # downstream modules that hold path references).
-    import app.paths
+    for mod_name in _RELOAD_ORDER:
+        if mod_name in sys.modules:
+            importlib.reload(sys.modules[mod_name])
 
-    importlib.reload(app.paths)
-    import app.config
+    # Fresh DB after the paths reload.
+    import app.db
 
-    importlib.reload(app.config)
+    app.db.init_db()
+
     yield tmp_path
-    # Cleanup: env var is restored by monkeypatch; modules will be reloaded again
-    # by the next test that uses this fixture.
 
 
 @pytest.fixture

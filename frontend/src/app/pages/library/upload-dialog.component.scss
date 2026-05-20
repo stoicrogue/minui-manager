@@ -1,0 +1,160 @@
+:host {
+  display: block;
+  min-width: 480px;
+  max-width: 600px;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 8px !important;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 24px;
+  border: 2px dashed rgba(255, 20, 147, 0.4);
+  border-radius: 8px;
+  background: rgba(0, 240, 255, 0.04);
+  transition: border-color 0.2s ease, background 0.2s ease;
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: var(--sw-cyan);
+  }
+
+  p {
+    margin: 0;
+    color: var(--sw-text-dim);
+  }
+
+  &.drag-over {
+    border-color: var(--sw-cyan);
+    background: rgba(0, 240, 255, 0.1);
+    box-shadow: 0 0 24px rgba(0, 240, 255, 0.25);
+  }
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px;
+  color: var(--sw-text-dim);
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  mat-icon {
+    color: var(--sw-cyan);
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  strong {
+    display: block;
+    color: var(--sw-text);
+  }
+
+  .size {
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--sw-text-dim);
+  }
+}
+
+.div {
+  border-color: var(--sw-border) !important;
+}
+
+.detection-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .label {
+    font-family: 'Orbitron', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    color: var(--sw-text-dim);
+  }
+}
+
+.reason {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sw-text-dim);
+  line-height: 1.4;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.opt-code {
+  display: inline-block;
+  width: 56px;
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--sw-cyan);
+}
+
+.opt-name {
+  color: var(--sw-text-dim);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sw-text-dim);
+  code {
+    color: var(--sw-cyan-soft);
+  }
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: rgba(255, 20, 147, 0.12);
+  color: var(--sw-pink-soft);
+  border: 1px solid rgba(255, 20, 147, 0.4);
+  font-size: 13px;
+}
+
+// Confidence badge colors
+::ng-deep mat-chip.confidence-high {
+  background: rgba(120, 255, 153, 0.18) !important;
+  color: #b6ffc1 !important;
+  border: 1px solid rgba(120, 255, 153, 0.5) !important;
+}
+::ng-deep mat-chip.confidence-medium {
+  background: rgba(0, 240, 255, 0.18) !important;
+  color: var(--sw-cyan) !important;
+  border: 1px solid rgba(0, 240, 255, 0.5) !important;
+}
+::ng-deep mat-chip.confidence-low {
+  background: rgba(255, 184, 0, 0.15) !important;
+  color: #ffd566 !important;
+  border: 1px solid rgba(255, 184, 0, 0.5) !important;
+}
+::ng-deep mat-chip.confidence-unknown {
+  background: rgba(255, 20, 147, 0.15) !important;
+  color: var(--sw-pink-soft) !important;
+  border: 1px solid rgba(255, 20, 147, 0.5) !important;
+}

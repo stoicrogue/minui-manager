@@ -1,0 +1,111 @@
+<h2 mat-dialog-title>Upload ROM</h2>
+
+<mat-dialog-content class="dialog-body">
+  @if (step() === 'pick') {
+    <div
+      class="dropzone"
+      [class.drag-over]="dragOver()"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()"
+      (drop)="onDrop($event)"
+    >
+      <mat-icon>cloud_upload</mat-icon>
+      <p>Drag a ROM file here, or</p>
+      <label class="file-picker">
+        <input type="file" (change)="onFileChosen($event)" hidden />
+        <button mat-stroked-button type="button" (click)="$any($event.target).previousElementSibling.click()">
+          Choose file
+        </button>
+      </label>
+      @if (errorMessage()) {
+        <p class="error">{{ errorMessage() }}</p>
+      }
+    </div>
+  }
+
+  @if (step() === 'uploading') {
+    <div class="status">
+      <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+      <p>Uploading…</p>
+    </div>
+  }
+
+  @if (step() === 'review' || step() === 'confirming') {
+    @if (upload(); as u) {
+      <div class="file-info">
+        <mat-icon>insert_drive_file</mat-icon>
+        <div>
+          <strong>{{ u.original_filename }}</strong>
+          <span class="size">{{ prettySize(u.size_bytes) }}</span>
+        </div>
+      </div>
+
+      <mat-divider class="div"></mat-divider>
+
+      @if (detection(); as det) {
+        <div class="detection-row">
+          <span class="label">Detection:</span>
+          <mat-chip [class]="confidenceClass(det.confidence)" highlighted>
+            {{ confidenceLabel(det.confidence) }} confidence
+          </mat-chip>
+        </div>
+        <p class="reason">{{ det.reason }}</p>
+      }
+
+      <div class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>System</mat-label>
+          <mat-select
+            [ngModel]="systemCode()"
+            (ngModelChange)="systemCode.set($event)"
+            [disabled]="step() === 'confirming'"
+          >
+            @for (c of candidates(); track c.code) {
+              <mat-option [value]="c.code">
+                <span class="opt-code">{{ c.code }}</span>
+                <span class="opt-name">{{ c.display_name }}</span>
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Display name</mat-label>
+          <input
+            matInput
+            [ngModel]="displayName()"
+            (ngModelChange)="displayName.set($event)"
+            [disabled]="step() === 'confirming'"
+            placeholder="Pokemon Unbound"
+          />
+        </mat-form-field>
+      </div>
+
+      <p class="hint">
+        On the SD card this game's folder will be named
+        <code>{{ displayName().trim() }} ({{ systemCode() }})</code>.
+      </p>
+
+      @if (errorMessage()) {
+        <p class="error">{{ errorMessage() }}</p>
+      }
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()" [disabled]="step() === 'confirming'">Cancel</button>
+  <button
+    mat-flat-button
+    color="primary"
+    (click)="confirm()"
+    [disabled]="!canConfirm() || step() === 'confirming'"
+  >
+    @if (step() === 'confirming') {
+      <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+    } @else {
+      <mat-icon>add</mat-icon>
+    }
+    Add to library
+  </button>
+</mat-dialog-actions>
