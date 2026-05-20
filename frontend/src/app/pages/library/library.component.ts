@@ -42,6 +42,9 @@ export class LibraryComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
   readonly activeFilter = signal<string | null>(null); // system_code filter
   readonly dragOver = signal<boolean>(false);
+  // Per-game cache-buster bumped whenever box art is re-selected. The image
+  // URL is otherwise stable, so without this the browser keeps the old PNG.
+  readonly boxArtVersion = signal<Record<number, number>>({});
 
   readonly systemFilters = computed(() => {
     const codes = new Set(this.games().map((g) => g.system_code));
@@ -101,6 +104,9 @@ export class LibraryComponent implements OnInit {
         this.snack.open(`Box art set for ${game.display_name}.`, undefined, {
           duration: 2000,
         });
+        // Bump this game's cache-buster so <img src> changes and the browser
+        // re-fetches the PNG instead of serving the stale cached copy.
+        this.boxArtVersion.update((v) => ({ ...v, [game.id]: Date.now() }));
       } else if (options.fromUpload) {
         // User skipped the picker right after upload — fine, the library
         // entry still exists, they can come back to it later.
@@ -159,8 +165,11 @@ export class LibraryComponent implements OnInit {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  /** Cache-buster keyed off the row id so a re-selection forces a re-fetch. */
+  /** Cache-buster: stable across page loads (uses game.id), but bumped to
+   * a fresh timestamp by openBoxartPicker after a successful re-selection
+   * so the browser actually re-fetches the new PNG. */
   boxArtUrl(game: LibraryGame): string {
-    return this.boxart.libraryBoxArtUrl(game.id, game.id);
+    const version = this.boxArtVersion()[game.id] ?? game.id;
+    return this.boxart.libraryBoxArtUrl(game.id, version);
   }
 }

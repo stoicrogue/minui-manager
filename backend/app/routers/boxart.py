@@ -1,15 +1,14 @@
-"""Box-art lookup + selection (Phase 4).
+"""Box-art lookup + selection (Phase 4 search/select, Phase 5 image processing).
 
 Endpoints:
     GET  /api/boxart/search?library_id=<id>     -> list of candidate thumbnails
-    POST /api/boxart/select                      -> download a chosen candidate
+    POST /api/boxart/select                      -> download + normalize a chosen candidate
     GET  /api/library/{id}/box-art               -> serve the saved PNG
 
-Selection writes the raw downloaded PNG to
-``./data/library/<CODE>/.res/<game_folder>.png``. Phase 5 will hook the
-image processor in to resize/normalize to 200x300 before saving; for
-now the raw bytes are persisted as-is, so what GitHub serves is what
-the library shows.
+Selection downloads the picked image, runs it through ``image_processor``
+to resize it to the MinUI 200x300 PNG contract (strategy from user
+settings), strips metadata, and writes the result to
+``./data/library/<CODE>/.res/<game_folder>.png``.
 """
 
 from __future__ import annotations
@@ -22,8 +21,10 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from app.config import load_settings
 from app.db import session_scope
 from app.services import boxart_libretro
+from app.services.image_processor import ImageProcessingError, process_image
 from app.services.library_store import get_library_game
 from app.services.system_registry import load_systems
 
@@ -143,7 +144,7 @@ class SelectRequest(BaseModel):
 
 @router.post("/select")
 async def select(body: SelectRequest) -> dict[str, object]:
-    """Download the chosen candidate and save it to the library's .res/ cache."""
+    """Download the chosen candidate, normalize it to 200x300 PNG, save it."""
     with session_scope() as session:
         game = get_library_game(session, body.library_id)
         if game is None:
@@ -161,13 +162,27 @@ async def select(body: SelectRequest) -> dict[str, object]:
     if not content:
         raise HTTPException(status_code=502, detail="Downloaded image was empty.")
 
+    settings = load_settings()
+    target = (settings.boxart_target_width, settings.boxart_target_height)
+    try:
+        processed = await asyncio.to_thread(
+            process_image, content, target, settings.boxart_resize_strategy
+        )
+    except ImageProcessingError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"Could not process image: {exc}"
+        ) from exc
+
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(content)
+    dest.write_bytes(processed)
     logger.info(
-        "Saved boxart for library_id=%s (%s) from %s",
+        "Saved boxart for library_id=%s (%s) from %s (strategy=%s, size=%sx%s)",
         body.library_id,
         body.source_name or "unknown",
         body.source_url,
+        settings.boxart_resize_strategy,
+        target[0],
+        target[1],
     )
 
     # Return the fresh public dict so the frontend can refresh its UI.

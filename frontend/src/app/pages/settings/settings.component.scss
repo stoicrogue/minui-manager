@@ -91,6 +91,13 @@
   border-top-color: var(--sw-border) !important;
 }
 
+.strategy-help {
+  margin: -8px 0 8px;
+  color: var(--sw-text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .status-row {
   display: flex;
   align-items: center;

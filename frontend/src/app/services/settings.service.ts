@@ -4,11 +4,13 @@ import { Observable } from 'rxjs';
 
 export type SDCardStatus = 'not_set' | 'not_found' | 'invalid' | 'ok';
 
+export type BoxartResizeStrategy = 'cover' | 'contain' | 'stretch';
+
 export interface AppSettings {
   sd_card_path: string | null;
   boxart_target_width: number;
   boxart_target_height: number;
-  boxart_resize_strategy: 'cover' | 'contain' | 'stretch';
+  boxart_resize_strategy: BoxartResizeStrategy;
   max_games_total: number | null;
   archive_on_remove: boolean;
   steamgriddb_api_key: string | null;
@@ -18,7 +20,7 @@ export interface SettingsPatch {
   sd_card_path?: string | null;
   boxart_target_width?: number;
   boxart_target_height?: number;
-  boxart_resize_strategy?: 'cover' | 'contain' | 'stretch';
+  boxart_resize_strategy?: BoxartResizeStrategy;
   max_games_total?: number | null;
   archive_on_remove?: boolean;
   steamgriddb_api_key?: string | null;

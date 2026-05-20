@@ -11,9 +11,11 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSelectModule } from '@angular/material/select';
 
 import {
   AppSettings,
+  BoxartResizeStrategy,
   SDCardStatus,
   SDCardStatusResponse,
   SettingsService,
@@ -35,6 +37,7 @@ import {
     MatDividerModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatSelectModule,
   ],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
@@ -47,9 +50,16 @@ export class SettingsComponent implements OnInit {
   readonly status = signal<SDCardStatusResponse | null>(null);
   readonly sdPathInput = signal<string>('');
   readonly slotCapInput = signal<number | null>(10);
+  readonly resizeStrategyInput = signal<BoxartResizeStrategy>('cover');
   readonly loading = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
   readonly picking = signal<boolean>(false);
+
+  readonly resizeStrategies: { value: BoxartResizeStrategy; label: string; help: string }[] = [
+    { value: 'cover', label: 'Cover (crop)', help: 'Fill the 200x300 slot; crop the overflow. Best for vertical box art.' },
+    { value: 'contain', label: 'Contain (letterbox)', help: 'Fit the whole image; pad with black. Preserves aspect ratio.' },
+    { value: 'stretch', label: 'Stretch', help: 'Force fit by distorting aspect. Last resort.' },
+  ];
 
   ngOnInit(): void {
     this.refresh();
@@ -62,6 +72,7 @@ export class SettingsComponent implements OnInit {
         this.settings.set(s);
         this.sdPathInput.set(s.sd_card_path ?? '');
         this.slotCapInput.set(s.max_games_total);
+        this.resizeStrategyInput.set(s.boxart_resize_strategy);
         this.loadStatus();
       },
       error: (err) => {
@@ -132,6 +143,26 @@ export class SettingsComponent implements OnInit {
         this.settings.set(s);
         this.saving.set(false);
         this.snack.open('Slot cap saved.', undefined, { duration: 2000 });
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.snack.open(`Save failed: ${err.message}`, 'Dismiss', { duration: 5000 });
+      },
+    });
+  }
+
+  saveResizeStrategy(): void {
+    const value = this.resizeStrategyInput();
+    this.saving.set(true);
+    this.api.updateSettings({ boxart_resize_strategy: value }).subscribe({
+      next: (s) => {
+        this.settings.set(s);
+        this.saving.set(false);
+        this.snack.open(
+          'Box art resize mode saved. New picks use this strategy; existing art is unchanged.',
+          undefined,
+          { duration: 3500 },
+        );
       },
       error: (err) => {
         this.saving.set(false);

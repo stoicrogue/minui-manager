@@ -6,10 +6,22 @@ traffic happens.
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
+
+
+def _real_png(size: tuple[int, int] = (400, 600), color: str = "red") -> bytes:
+    """Build a real decodable PNG of the requested size — Phase 5 runs every
+    downloaded image through PIL, so the fake \\x89PNG header bytes won't work
+    anymore.
+    """
+    buf = BytesIO()
+    Image.new("RGB", size, color).save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def _client(tmp_project_root: Path) -> TestClient:
@@ -144,20 +156,22 @@ def test_search_handles_github_404(
     assert "not found" in body["note"].lower()
 
 
-def test_select_downloads_and_writes_box_art(
+def test_select_downloads_processes_and_writes_box_art(
     tmp_project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The downloaded image is run through the processor and saved as a
+    200x300 PNG, not as the raw bytes that came back from GitHub."""
     from app.services import boxart_libretro
     from app.routers import boxart as boxart_router
 
     client = _client(tmp_project_root)
     lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
 
-    fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    source = _real_png(size=(400, 600), color="red")
 
     def fake_dl(url: str, http_client=None) -> bytes:
         assert url == "https://raw/tetris.png"
-        return fake_png
+        return source
 
     monkeypatch.setattr(boxart_libretro, "download_image", fake_dl)
     monkeypatch.setattr(boxart_router.boxart_libretro, "download_image", fake_dl)
@@ -175,7 +189,78 @@ def test_select_downloads_and_writes_box_art(
     assert body["id"] == lib_id
     assert body["has_boxart"] is True
     assert body["boxart_path"] is not None
-    assert Path(body["boxart_path"]).read_bytes() == fake_png
+
+    saved = Path(body["boxart_path"])
+    assert saved.is_file()
+    # Saved file is the normalized output, not the raw download.
+    assert saved.read_bytes() != source
+    with Image.open(saved) as out:
+        assert out.size == (200, 300)
+        assert out.format == "PNG"
+
+
+def test_select_422_on_undecodable_image(
+    tmp_project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The processor rejects garbage bytes and the router maps that to 422."""
+    from app.services import boxart_libretro
+    from app.routers import boxart as boxart_router
+
+    client = _client(tmp_project_root)
+    lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
+
+    monkeypatch.setattr(
+        boxart_libretro, "download_image", lambda u, http_client=None: b"not an image"
+    )
+    monkeypatch.setattr(
+        boxart_router.boxart_libretro,
+        "download_image",
+        lambda u, http_client=None: b"not an image",
+    )
+
+    r = client.post(
+        "/api/boxart/select",
+        json={"library_id": lib_id, "source_url": "https://raw/broken.png"},
+    )
+    assert r.status_code == 422
+    assert "process" in r.json()["detail"].lower()
+
+
+def test_select_honors_resize_strategy_from_settings(
+    tmp_project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A landscape source under 'contain' must letterbox with black; the
+    selected strategy on settings is what the processor must use."""
+    from app.services import boxart_libretro
+    from app.routers import boxart as boxart_router
+
+    client = _client(tmp_project_root)
+
+    # Flip the strategy to 'contain' via the settings endpoint.
+    client.patch("/api/settings", json={"boxart_resize_strategy": "contain"})
+
+    lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
+    source = _real_png(size=(600, 300), color="white")
+
+    monkeypatch.setattr(
+        boxart_libretro, "download_image", lambda u, http_client=None: source
+    )
+    monkeypatch.setattr(
+        boxart_router.boxart_libretro, "download_image", lambda u, http_client=None: source
+    )
+
+    r = client.post(
+        "/api/boxart/select",
+        json={"library_id": lib_id, "source_url": "https://raw/tetris.png"},
+    )
+    assert r.status_code == 200
+    saved = Path(r.json()["boxart_path"])
+    with Image.open(saved) as out:
+        rgb = out.convert("RGB")
+        assert rgb.size == (200, 300)
+        # Top strip of a letterboxed image is black; center is the white source.
+        assert rgb.getpixel((100, 10)) == (0, 0, 0)
+        assert rgb.getpixel((100, 150)) == (255, 255, 255)
 
 
 def test_select_404_for_unknown_library_id(
@@ -198,9 +283,11 @@ def test_serve_box_art_streams_saved_png(
     client = _client(tmp_project_root)
     lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
 
-    fake_png = b"\x89PNG\r\n\x1a\nBYTES"
-    monkeypatch.setattr(boxart_libretro, "download_image", lambda u, http_client=None: fake_png)
-    monkeypatch.setattr(boxart_router.boxart_libretro, "download_image", lambda u, http_client=None: fake_png)
+    source = _real_png(size=(400, 600), color="green")
+    monkeypatch.setattr(boxart_libretro, "download_image", lambda u, http_client=None: source)
+    monkeypatch.setattr(
+        boxart_router.boxart_libretro, "download_image", lambda u, http_client=None: source
+    )
 
     client.post(
         "/api/boxart/select",
@@ -210,7 +297,10 @@ def test_serve_box_art_streams_saved_png(
     r = client.get(f"/api/library/{lib_id}/box-art")
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/png"
-    assert r.content == fake_png
+    # The served bytes are the processed 200x300 output, not the raw download.
+    with Image.open(BytesIO(r.content)) as img:
+        assert img.size == (200, 300)
+        assert img.format == "PNG"
 
 
 def test_serve_box_art_404_when_not_selected(tmp_project_root: Path) -> None:

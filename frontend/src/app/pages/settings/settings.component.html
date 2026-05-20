@@ -124,4 +124,45 @@
       </div>
     </mat-card-content>
   </mat-card>
+
+  <mat-card appearance="outlined" class="card">
+    <mat-card-header>
+      <mat-card-title>Box art</mat-card-title>
+      <mat-card-subtitle>
+        MinUI's Five Game layout wants <strong>200×300 PNG</strong>. When the picked
+        image isn't that shape, choose how to fit it. Existing art isn't touched —
+        only newly-selected art uses the new mode.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Resize strategy</mat-label>
+        <mat-select
+          [ngModel]="resizeStrategyInput()"
+          (ngModelChange)="resizeStrategyInput.set($event)"
+        >
+          @for (opt of resizeStrategies; track opt.value) {
+            <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      @for (opt of resizeStrategies; track opt.value) {
+        @if (opt.value === resizeStrategyInput()) {
+          <p class="strategy-help">{{ opt.help }}</p>
+        }
+      }
+      <div class="actions">
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="saveResizeStrategy()"
+          [disabled]="saving()"
+        >
+          <mat-icon>save</mat-icon>
+          Save
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
 </div>
