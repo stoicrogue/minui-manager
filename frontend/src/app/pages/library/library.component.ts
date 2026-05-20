@@ -8,11 +8,13 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 
 import { LibraryGame, LibraryService } from '../../services/library.service';
 import { BoxartService } from '../../services/boxart.service';
 import { UploadDialogComponent } from './upload-dialog.component';
 import { BoxartPickerDialogComponent } from './boxart-picker-dialog.component';
+import { SendToDeviceDialogComponent } from './send-to-device-dialog.component';
 
 @Component({
   selector: 'app-library-page',
@@ -27,6 +29,7 @@ import { BoxartPickerDialogComponent } from './boxart-picker-dialog.component';
     MatSnackBarModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatCheckboxModule,
   ],
   templateUrl: './library.component.html',
   styleUrl: './library.component.scss',
@@ -45,6 +48,10 @@ export class LibraryComponent implements OnInit {
   // Per-game cache-buster bumped whenever box art is re-selected. The image
   // URL is otherwise stable, so without this the browser keeps the old PNG.
   readonly boxArtVersion = signal<Record<number, number>>({});
+  // Selection state: ids of games picked for the next "Send to device" sync.
+  readonly selectedIds = signal<Set<number>>(new Set());
+  readonly selectedCount = computed(() => this.selectedIds().size);
+  readonly hasSelection = computed(() => this.selectedCount() > 0);
 
   readonly systemFilters = computed(() => {
     const codes = new Set(this.games().map((g) => g.system_code));
@@ -132,6 +139,52 @@ export class LibraryComponent implements OnInit {
 
   setFilter(code: string | null): void {
     this.activeFilter.set(code);
+  }
+
+  isSelected(game: LibraryGame): boolean {
+    return this.selectedIds().has(game.id);
+  }
+
+  toggleSelected(game: LibraryGame, event?: Event): void {
+    event?.stopPropagation();
+    this.selectedIds.update((s) => {
+      const next = new Set(s);
+      if (next.has(game.id)) next.delete(game.id);
+      else next.add(game.id);
+      return next;
+    });
+  }
+
+  clearSelection(): void {
+    this.selectedIds.set(new Set());
+  }
+
+  selectAllVisible(): void {
+    this.selectedIds.set(new Set(this.visibleGames().map((g) => g.id)));
+  }
+
+  openSendToDevice(): void {
+    const ids = this.selectedIds();
+    const picked = this.games().filter((g) => ids.has(g.id));
+    if (picked.length === 0) return;
+    const ref = this.dialog.open(SendToDeviceDialogComponent, {
+      data: { games: picked },
+      maxWidth: '95vw',
+      autoFocus: false,
+      disableClose: true,
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (!result?.cancelled && (result?.ok ?? 0) > 0) {
+        const okN = result.ok;
+        const errN = result.errors ?? 0;
+        const msg =
+          errN > 0
+            ? `Sent ${okN} games, ${errN} failed.`
+            : `Sent ${okN} game${okN === 1 ? '' : 's'} to the card.`;
+        this.snack.open(msg, undefined, { duration: 3500 });
+        this.clearSelection();
+      }
+    });
   }
 
   // Drag-and-drop on the empty area / whole page → opens the upload dialog

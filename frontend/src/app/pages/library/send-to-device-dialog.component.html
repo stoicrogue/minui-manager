@@ -1,0 +1,172 @@
+<h2 mat-dialog-title>
+  Send to device
+  <span class="subtitle">
+    {{ data.games.length }} game{{ data.games.length === 1 ? '' : 's' }} selected
+  </span>
+</h2>
+
+<mat-dialog-content class="body">
+  @if (phase().kind === 'planning') {
+    <div class="loading">
+      <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+      <p>Planning the sync…</p>
+    </div>
+  }
+
+  @if (plan(); as p) {
+    <div class="summary">
+      <mat-chip-set>
+        <mat-chip class="chip-info">
+          <mat-icon matChipAvatar>folder_open</mat-icon>
+          Slots {{ p.current_slot_count }} → {{ p.new_slot_count }}@if (p.slot_cap !== null) { / {{ p.slot_cap }} }
+        </mat-chip>
+        <mat-chip class="chip-info">
+          <mat-icon matChipAvatar>playlist_add_check</mat-icon>
+          {{ p.total_ops }} operation{{ p.total_ops === 1 ? '' : 's' }}
+        </mat-chip>
+      </mat-chip-set>
+    </div>
+
+    @if (phase().kind === 'preview') {
+      <p class="hint">
+        Nothing has been written yet. Review what will happen, then confirm.
+      </p>
+    }
+    @if (phase().kind === 'syncing') {
+      <div class="loading">
+        <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+        <p>Writing to the SD card…</p>
+      </div>
+    }
+
+    <div class="game-list">
+      @for (g of p.games; track g.library_id) {
+        <div class="game-block">
+          <div class="game-header">
+            <div class="game-title">
+              <strong>{{ g.display_name }}</strong>
+              <mat-chip class="chip-code">{{ g.system_code }}</mat-chip>
+              @if (g.is_replacement) {
+                <mat-chip class="chip-warn" matTooltip="Same folder name already on the card — its contents will be replaced.">
+                  <mat-icon matChipAvatar>swap_horiz</mat-icon>
+                  Overwrite
+                </mat-chip>
+              }
+              @if (!g.has_boxart) {
+                <mat-chip class="chip-warn" [matTooltip]="g.boxart_missing_reason || ''">
+                  <mat-icon matChipAvatar>image_not_supported</mat-icon>
+                  No art
+                </mat-chip>
+              }
+            </div>
+            <div class="game-sub">{{ g.game_folder_name }} · {{ g.rom_filename }}</div>
+          </div>
+          <ul class="ops">
+            @for (op of g.ops; track op.dest_rel + op.action) {
+              <li>
+                <mat-icon class="op-icon" [class.op-warn]="op.action === 'remove_tree'">
+                  @switch (op.action) {
+                    @case ('mkdir') { create_new_folder }
+                    @case ('copy') { content_copy }
+                    @case ('write_text') { edit_note }
+                    @case ('remove_tree') { delete_sweep }
+                  }
+                </mat-icon>
+                <span class="op-label">{{ opLabel(op) }}</span>
+                @if (op.size_bytes !== null) {
+                  <span class="op-size">{{ prettySize(op.size_bytes) }}</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+  }
+
+  @if (conflict(); as c) {
+    <div class="conflict">
+      <mat-icon class="warn-icon">warning</mat-icon>
+      <h3>Not enough slots</h3>
+      <p>
+        The card holds <strong>{{ c.current_slot_count }}</strong> game{{ c.current_slot_count === 1 ? '' : 's' }} and your
+        cap is <strong>{{ c.cap }}</strong>. Sending these would push it to
+        <strong>{{ c.projected_slot_count }}</strong>.
+      </p>
+      @if (c.replacing_folder_names.length > 0) {
+        <p class="muted">
+          {{ c.replacing_folder_names.length }} of the selected
+          game{{ c.replacing_folder_names.length === 1 ? '' : 's' }} will overwrite existing
+          slots and don't count against the cap.
+        </p>
+      }
+      <p class="muted">
+        Close this dialog and remove games from the card (or raise the cap in Settings)
+        before retrying.
+      </p>
+      <details>
+        <summary>Currently on the card ({{ c.current_games.length }})</summary>
+        <ul class="current-games">
+          @for (g of c.current_games; track g.game_folder_name) {
+            <li>{{ g.game_folder_name }}</li>
+          }
+        </ul>
+      </details>
+    </div>
+  }
+
+  @if (response(); as r) {
+    <div class="result" [class.result-ok]="r.result?.error_count === 0" [class.result-partial]="(r.result?.error_count ?? 0) > 0">
+      @if (r.result?.error_count === 0) {
+        <mat-icon class="ok-icon">check_circle</mat-icon>
+        <h3>Done</h3>
+        <p>
+          {{ r.result?.ok_count }} game{{ (r.result?.ok_count ?? 0) === 1 ? '' : 's' }} written to the card.
+          Eject when ready.
+        </p>
+      } @else {
+        <mat-icon class="warn-icon">error</mat-icon>
+        <h3>Finished with errors</h3>
+        <p>
+          {{ r.result?.ok_count }} succeeded, {{ r.result?.error_count }} failed.
+        </p>
+        <ul class="errors">
+          @for (g of (r.result?.games ?? []); track g.library_id) {
+            @if (g.status === 'error') {
+              <li><strong>{{ g.game_folder_name }}</strong>: {{ g.error }}</li>
+            }
+          }
+        </ul>
+      }
+    </div>
+  }
+
+  @if (errorMessage(); as err) {
+    <div class="error-row">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ err }}</span>
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (phase().kind === 'preview') {
+    <button mat-button (click)="close()">Cancel</button>
+    <button mat-flat-button color="primary" (click)="confirm()">
+      <mat-icon>sd_card</mat-icon>
+      Send {{ data.games.length }} to device
+    </button>
+  } @else if (phase().kind === 'conflict' || phase().kind === 'error') {
+    <button mat-button (click)="close()">Close</button>
+    <button mat-stroked-button (click)="retry()">
+      <mat-icon>refresh</mat-icon>
+      Retry
+    </button>
+  } @else if (phase().kind === 'done') {
+    <button mat-flat-button color="primary" (click)="close()">Close</button>
+  } @else if (phase().kind === 'syncing') {
+    <button mat-button disabled>Writing…</button>
+  } @else {
+    <button mat-button (click)="close()">Cancel</button>
+  }
+</mat-dialog-actions>

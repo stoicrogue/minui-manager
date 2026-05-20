@@ -15,6 +15,21 @@
       </div>
     }
     <span class="spacer"></span>
+    @if (hasSelection()) {
+      <button mat-stroked-button (click)="clearSelection()">
+        <mat-icon>close</mat-icon>
+        Clear ({{ selectedCount() }})
+      </button>
+      <button mat-flat-button color="accent" class="send-btn" (click)="openSendToDevice()">
+        <mat-icon>sd_card</mat-icon>
+        Send {{ selectedCount() }} to device
+      </button>
+    } @else if (visibleGames().length > 0) {
+      <button mat-stroked-button (click)="selectAllVisible()">
+        <mat-icon>done_all</mat-icon>
+        Select all
+      </button>
+    }
     <button mat-stroked-button (click)="refresh()" [disabled]="loading()">
       @if (loading()) {
         <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
@@ -78,7 +93,14 @@
   } @else if (visibleGames().length > 0) {
     <div class="game-grid">
       @for (game of visibleGames(); track game.id) {
-        <mat-card appearance="outlined" class="library-card">
+        <mat-card appearance="outlined" class="library-card" [class.selected]="isSelected(game)">
+          <mat-checkbox
+            class="select-box"
+            [checked]="isSelected(game)"
+            (change)="toggleSelected(game)"
+            (click)="$event.stopPropagation()"
+            [matTooltip]="isSelected(game) ? 'Deselect' : 'Select for next sync'"
+          ></mat-checkbox>
           <div class="art-wrapper" (click)="openBoxartPicker(game)">
             @if (game.has_boxart) {
               <img
