@@ -1,0 +1,44 @@
+[project]
+name = "minui-manager"
+version = "0.1.0"
+description = "A local tool for curating a Miyoo Mini Plus running MinUI in the Five Game Handheld layout."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
+    "python-multipart>=0.0.12",  # for upload endpoints (Phase 3)
+    "httpx>=0.27",                # for libretro fetcher (Phase 4)
+    "rapidfuzz>=3.10",            # for fuzzy matching (Phase 4)
+    "Pillow>=11.0",               # for image resizing (Phase 5)
+    "SQLAlchemy>=2.0",            # for DB (Phase 3+)
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",  # also used by TestClient
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
