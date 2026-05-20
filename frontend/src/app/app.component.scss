@@ -4,19 +4,29 @@
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 12px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+  gap: 14px;
+  padding: 0 20px;
 }
 
 .app-logo {
   font-size: 28px;
   width: 28px;
   height: 28px;
+  color: var(--sw-cyan);
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6));
 }
 
 .app-title {
-  font-size: 18px;
-  font-weight: 500;
+  font-family: 'Orbitron', 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--sw-pink) 0%, var(--sw-cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 28px rgba(255, 20, 147, 0.4);
 }
 
 .spacer {
@@ -24,10 +34,21 @@
 }
 
 .app-main {
-  background: #fafafa;
   min-height: calc(100vh - 64px);
+  position: relative;
+  z-index: 1; // sit above the body::before grid overlay
+}
+
+// Nav button styling
+a[mat-button] {
+  font-family: 'Orbitron', 'Roboto', sans-serif !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 13px !important;
+  font-weight: 500 !important;
 }
 
 a[mat-button].active {
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--sw-cyan) !important;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }

@@ -1,29 +1,54 @@
 .settings-page {
-  max-width: 800px;
+  max-width: 820px;
   margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: 32px 16px 64px;
 
   h1 {
-    margin: 0 0 24px;
-    font-size: 28px;
-    font-weight: 500;
+    margin: 0 0 32px;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sw-pink);
+    text-shadow: 0 0 20px rgba(255, 20, 147, 0.5), 0 0 40px rgba(255, 20, 147, 0.25);
   }
 }
 
 .card {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+}
+
+// Give the header room to breathe and a divider before content.
+::ng-deep .card .mat-mdc-card-header {
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--sw-border);
+}
+
+// Material's mat-card-content starts at the very top; give the form
+// fields proper breathing room from the subtitle above.
+::ng-deep .card .mat-mdc-card-content {
+  padding-top: 24px;
+}
+
+// Floating labels on outline-style form fields ride up into the area
+// above the input. Give the field itself a top margin so the label has
+// somewhere to go without overlapping the card subtitle.
+.mat-mdc-form-field {
+  margin-top: 8px;
+  display: block;
 }
 
 .full-width {
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
 }
 
 .actions {
   display: flex;
   gap: 12px;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 12px;
 
   button {
     display: inline-flex;
@@ -33,41 +58,40 @@
 }
 
 .divider {
-  margin: 20px 0;
+  margin: 24px 0;
+  border-top-color: var(--sw-border) !important;
 }
 
 .status-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-top: 8px;
+  flex-wrap: wrap;
 
   .status-detail {
-    color: rgba(0, 0, 0, 0.6);
+    color: var(--sw-text-dim);
     font-size: 14px;
   }
 }
 
 .missing {
-  margin-top: 16px;
+  margin-top: 20px;
 
   strong {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    color: var(--sw-pink-soft);
+    font-family: 'Orbitron', 'Roboto', sans-serif;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 13px;
   }
 
   .hint {
-    margin-top: 12px;
-    color: rgba(0, 0, 0, 0.6);
+    margin-top: 14px;
+    color: var(--sw-text-dim);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.6;
   }
-}
-
-code {
-  background: rgba(0, 0, 0, 0.05);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 0.9em;
 }

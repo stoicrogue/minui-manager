@@ -1,4 +1,196 @@
-/* You can add global styles to this file, and also import other style files */
+@use '@angular/material' as mat;
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+// Synthwave theme: magenta primary + cyan tertiary, dark color scheme.
+// Material M3 generates ~all component colors from this config; we layer
+// custom synthwave accents (gradients, glow, retro fonts) below.
+html {
+  color-scheme: dark;
+  @include mat.theme(
+    (
+      color: (
+        theme-type: dark,
+        primary: mat.$magenta-palette,
+        tertiary: mat.$cyan-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
+  // Palette — the canonical synthwave hues.
+  --sw-bg-deep: #0d0521;
+  --sw-bg-mid: #1a0a3e;
+  --sw-bg-card: #1f0e44;
+  --sw-bg-card-hover: #2a1456;
+  --sw-pink: #ff1493;
+  --sw-pink-soft: #ff6ec7;
+  --sw-cyan: #00f0ff;
+  --sw-cyan-soft: #7df9ff;
+  --sw-purple: #a855f7;
+  --sw-text: #f4ecff;
+  --sw-text-dim: #b39ddb;
+  --sw-border: rgba(255, 20, 147, 0.28);
+  --sw-border-strong: rgba(255, 20, 147, 0.6);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  color: var(--sw-text);
+
+  // Layered background: vertical purple gradient + subtle grid overlay.
+  background:
+    linear-gradient(
+      180deg,
+      var(--sw-bg-deep) 0%,
+      var(--sw-bg-mid) 50%,
+      var(--sw-bg-deep) 100%
+    );
+  background-attachment: fixed;
+  min-height: 100vh;
+  position: relative;
+}
+
+// Subtle grid lines overlaid on the gradient. Pointer-events: none so it
+// doesn't intercept clicks.
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 20, 147, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 30%, black 70%, transparent 100%);
+}
+
+// Display font for headings and branding.
+h1,
+h2,
+h3 {
+  font-family: 'Orbitron', 'Roboto', sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--sw-text);
+}
+
+code {
+  font-family: 'Fira Code', 'Consolas', 'Courier New', monospace;
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--sw-cyan-soft);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  border: 1px solid rgba(0, 240, 255, 0.18);
+}
+
+// ---- Material component overrides ----
+//
+// M3 generates plenty of usable defaults, but a few key surfaces benefit
+// from explicit synthwave styling.
+
+// Toolbar — Material's toolbar uses --mat-toolbar-* tokens; override
+// the container via direct selector for a gradient + neon border.
+.mat-toolbar {
+  background: linear-gradient(
+    90deg,
+    #0d0521 0%,
+    #2d1b69 50%,
+    #0d0521 100%
+  ) !important;
+  border-bottom: 1px solid var(--sw-border-strong);
+  box-shadow: 0 0 24px rgba(255, 20, 147, 0.35), 0 2px 0 var(--sw-border);
+  color: var(--sw-text) !important;
+}
+
+// Cards — neon-edged dark panels.
+.mat-mdc-card {
+  background: var(--sw-bg-card) !important;
+  border: 1px solid var(--sw-border) !important;
+  box-shadow: 0 0 0 1px rgba(255, 20, 147, 0.05),
+    0 4px 24px rgba(0, 0, 0, 0.4) !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mat-mdc-card:hover {
+  border-color: var(--sw-border-strong) !important;
+  box-shadow: 0 0 0 1px rgba(255, 20, 147, 0.15),
+    0 0 32px rgba(255, 20, 147, 0.18),
+    0 4px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+.mat-mdc-card-title {
+  color: var(--sw-cyan) !important;
+  font-family: 'Orbitron', 'Roboto', sans-serif !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.mat-mdc-card-subtitle {
+  color: var(--sw-text-dim) !important;
+  margin-top: 6px !important;
+}
+
+// Primary buttons — hot pink with a soft glow on hover.
+.mat-mdc-raised-button.mat-primary,
+.mat-mdc-unelevated-button.mat-primary,
+button[mat-flat-button][color='primary'] {
+  background: var(--sw-pink) !important;
+  color: white !important;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 12px rgba(255, 20, 147, 0.45);
+  transition: box-shadow 0.18s ease, transform 0.1s ease;
+}
+
+.mat-mdc-raised-button.mat-primary:hover,
+.mat-mdc-unelevated-button.mat-primary:hover,
+button[mat-flat-button][color='primary']:hover {
+  box-shadow: 0 0 20px rgba(255, 20, 147, 0.7);
+}
+
+// Text buttons — cyan accent.
+.mat-mdc-button:not([color='primary']) {
+  color: var(--sw-cyan) !important;
+}
+
+// Chips — make the "OK" / "Invalid" status chips glow.
+.mat-mdc-chip.mat-mdc-standard-chip {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+// Use highlighted color via attribute so the OK chip glows cyan and warn glows pink.
+.mat-mdc-chip-highlighted[color='primary'] {
+  background: rgba(0, 240, 255, 0.18) !important;
+  color: var(--sw-cyan) !important;
+  border: 1px solid rgba(0, 240, 255, 0.5) !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.3);
+}
+
+.mat-mdc-chip-highlighted[color='warn'] {
+  background: rgba(255, 20, 147, 0.18) !important;
+  color: var(--sw-pink-soft) !important;
+  border: 1px solid rgba(255, 20, 147, 0.5) !important;
+  box-shadow: 0 0 14px rgba(255, 20, 147, 0.3);
+}
+
+.mat-mdc-chip-highlighted[color='accent'] {
+  background: rgba(168, 85, 247, 0.18) !important;
+  color: #d4b5ff !important;
+  border: 1px solid rgba(168, 85, 247, 0.5) !important;
+}
+
+// Form fields — neon focus ring.
+.mat-mdc-form-field {
+  --mdc-outlined-text-field-focus-outline-color: var(--sw-cyan);
+  --mdc-outlined-text-field-focus-label-text-color: var(--sw-cyan);
+  --mdc-outlined-text-field-caret-color: var(--sw-cyan);
+}
