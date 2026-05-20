@@ -11,12 +11,10 @@
     >
       <mat-icon>cloud_upload</mat-icon>
       <p>Drag a ROM file here, or</p>
-      <label class="file-picker">
-        <input type="file" (change)="onFileChosen($event)" hidden />
-        <button mat-stroked-button type="button" (click)="$any($event.target).previousElementSibling.click()">
-          Choose file
-        </button>
-      </label>
+      <input #fileInput type="file" (change)="onFileChosen($event)" hidden />
+      <button mat-stroked-button type="button" (click)="fileInput.click()">
+        Choose file
+      </button>
       @if (errorMessage()) {
         <p class="error">{{ errorMessage() }}</p>
       }

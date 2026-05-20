@@ -80,6 +80,9 @@ export class UploadDialogComponent {
   onFileChosen(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
+    // Clear the value so re-picking the same file fires change again
+    // (browsers suppress duplicate change events otherwise).
+    input.value = '';
     if (file) {
       this.beginUpload(file);
     }
