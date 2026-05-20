@@ -24,9 +24,11 @@ _RELOAD_ORDER = (
     "app.services.sdcard_reader",
     "app.services.folder_picker",
     "app.services.library_store",
+    "app.services.boxart_libretro",
     "app.routers.settings",
     "app.routers.sdcard",
     "app.routers.library",
+    "app.routers.boxart",
     "app.main",
 )
 

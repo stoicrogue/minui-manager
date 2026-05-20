@@ -1,0 +1,77 @@
+<h2 mat-dialog-title>
+  Find box art
+  <span class="subtitle">for {{ data.game.display_name }} ({{ data.game.system_code }})</span>
+</h2>
+
+<mat-dialog-content class="picker-body">
+  <div class="query-row">
+    <mat-form-field appearance="outline" class="query-field">
+      <mat-label>Search</mat-label>
+      <input
+        matInput
+        [ngModel]="queryOverride()"
+        (ngModelChange)="queryOverride.set($event)"
+        (keyup.enter)="runSearch()"
+      />
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+    <button mat-stroked-button (click)="runSearch()" [disabled]="!canSearch()">
+      <mat-icon>refresh</mat-icon>
+      Re-search
+    </button>
+  </div>
+
+  @if (searching()) {
+    <div class="loading">
+      <mat-progress-spinner mode="indeterminate" diameter="36"></mat-progress-spinner>
+      <p>Searching libretro-thumbnails…</p>
+    </div>
+  }
+
+  @if (!searching() && result(); as r) {
+    @if (r.note) {
+      <p class="note">{{ r.note }}</p>
+    }
+    @if (r.candidates.length > 0) {
+      <p class="meta">
+        Showing top {{ r.candidates.length }} match{{ r.candidates.length === 1 ? '' : 'es' }}
+        from <code>libretro-thumbnails/{{ r.repo }}</code>{{ r.cache_hit ? ' (cached)' : '' }}.
+      </p>
+      <div class="candidate-grid">
+        @for (c of r.candidates; track c.source_url) {
+          <div
+            class="candidate"
+            [class.selecting]="selecting() === c.source_url"
+            (click)="pick(c)"
+          >
+            <div class="art-wrap">
+              <img
+                [src]="c.source_url"
+                [alt]="c.name"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+              />
+              @if (selecting() === c.source_url) {
+                <div class="overlay">
+                  <mat-progress-spinner mode="indeterminate" diameter="32"></mat-progress-spinner>
+                </div>
+              }
+            </div>
+            <div class="cand-meta">
+              <div class="cand-name" [title]="c.name">{{ c.name }}</div>
+              <span class="score" [class]="scoreClass(c.score)">{{ c.score }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="skip()" [disabled]="selecting() !== null">Skip for now</button>
+</mat-dialog-actions>

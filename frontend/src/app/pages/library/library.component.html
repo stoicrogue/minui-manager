@@ -79,17 +79,22 @@
     <div class="game-grid">
       @for (game of visibleGames(); track game.id) {
         <mat-card appearance="outlined" class="library-card">
-          <div class="art-wrapper">
+          <div class="art-wrapper" (click)="openBoxartPicker(game)">
             @if (game.has_boxart) {
-              <!-- Phase 5 will populate art; for now show placeholder. -->
-              <div class="art art-placeholder">
-                <mat-icon>image</mat-icon>
-                <span>Art</span>
+              <img
+                class="art"
+                [src]="boxArtUrl(game)"
+                [alt]="game.display_name + ' box art'"
+                loading="lazy"
+              />
+              <div class="art-overlay">
+                <mat-icon>image_search</mat-icon>
+                <span>Change art</span>
               </div>
             } @else {
               <div class="art art-placeholder">
-                <mat-icon>image_not_supported</mat-icon>
-                <span>No art yet</span>
+                <mat-icon>image_search</mat-icon>
+                <span>Find art</span>
               </div>
             }
           </div>
@@ -102,6 +107,14 @@
             <div class="badges">
               <mat-chip class="badge code">{{ game.system_code }}</mat-chip>
               <span class="actions-spacer"></span>
+              <button
+                mat-icon-button
+                class="art-btn"
+                (click)="openBoxartPicker(game)"
+                [matTooltip]="game.has_boxart ? 'Change box art' : 'Find box art'"
+              >
+                <mat-icon>image_search</mat-icon>
+              </button>
               <button
                 mat-icon-button
                 class="delete-btn"

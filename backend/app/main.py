@@ -3,6 +3,7 @@
 Phase 1: settings + SD card status.
 Phase 2: SD card games + orphan art + box art streaming.
 Phase 3: library upload + system detection + library CRUD.
+Phase 4: libretro-thumbnails search + select + library box-art serving.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
 from app.paths import ensure_data_dirs
-from app.routers import library, sdcard, settings
+from app.routers import boxart, library, sdcard, settings
 from app.services.library_store import cleanup_stale_drafts
 
 
@@ -51,3 +52,5 @@ def health() -> dict[str, str]:
 app.include_router(settings.router)
 app.include_router(sdcard.router)
 app.include_router(library.router)
+app.include_router(boxart.router)
+app.include_router(boxart.library_extra)

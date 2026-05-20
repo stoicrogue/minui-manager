@@ -1,11 +1,12 @@
-"""SQLAlchemy models. Phase 3 only needs LibraryGame."""
+"""SQLAlchemy models. Phase 3 added LibraryGame; Phase 4 adds the
+libretro-thumbnails listing cache."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -70,3 +71,18 @@ class LibraryGame(Base):
             "has_boxart": self.boxart_path.is_file(),
             "boxart_path": str(self.boxart_path) if self.boxart_path.is_file() else None,
         }
+
+
+class LibretroListingCache(Base):
+    """Cached libretro-thumbnails directory listing per repo.
+
+    Refreshed at most once every 24h (see boxart_libretro.LISTING_TTL).
+    The listing is the JSON payload from the GitHub Contents API: a list
+    of ``{"name": "...", "download_url": "https://raw..."}`` entries.
+    """
+
+    __tablename__ = "libretro_listing_cache"
+
+    repo: Mapped[str] = mapped_column(String(256), primary_key=True)
+    listing_json: Mapped[str] = mapped_column(Text, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)

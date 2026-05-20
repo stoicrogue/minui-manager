@@ -148,11 +148,52 @@
 }
 
 .art-wrapper {
+  position: relative;
   background: linear-gradient(180deg, #2a1456 0%, #1a0a3e 100%);
   aspect-ratio: 200 / 300;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+
+  .art {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .art-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(13, 5, 33, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    color: var(--sw-cyan);
+
+    mat-icon {
+      font-size: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+  }
+
+  &:hover .art-overlay {
+    opacity: 1;
+  }
 }
 
 .art-placeholder {
@@ -220,21 +261,25 @@
       flex: 1;
     }
 
-    .delete-btn {
+    .delete-btn,
+    .art-btn {
       color: var(--sw-text-dim) !important;
       width: 32px;
       height: 32px;
       line-height: 32px;
-
-      &:hover {
-        color: var(--sw-pink) !important;
-      }
 
       mat-icon {
         font-size: 18px;
         width: 18px;
         height: 18px;
       }
+    }
+
+    .delete-btn:hover {
+      color: var(--sw-pink) !important;
+    }
+    .art-btn:hover {
+      color: var(--sw-cyan) !important;
     }
   }
 }

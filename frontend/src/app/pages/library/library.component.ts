@@ -10,7 +10,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { LibraryGame, LibraryService } from '../../services/library.service';
+import { BoxartService } from '../../services/boxart.service';
 import { UploadDialogComponent } from './upload-dialog.component';
+import { BoxartPickerDialogComponent } from './boxart-picker-dialog.component';
 
 @Component({
   selector: 'app-library-page',
@@ -31,6 +33,7 @@ import { UploadDialogComponent } from './upload-dialog.component';
 })
 export class LibraryComponent implements OnInit {
   private readonly api = inject(LibraryService);
+  private readonly boxart = inject(BoxartService);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
 
@@ -78,11 +81,31 @@ export class LibraryComponent implements OnInit {
     ref.afterClosed().subscribe((result) => {
       if (result?.confirmed) {
         const g = result.game as LibraryGame;
-        this.snack.open(`Added ${g.display_name} (${g.system_code}) to library.`, undefined, {
-          duration: 3000,
+        this.snack.open(`Added ${g.display_name} (${g.system_code}). Finding box art…`, undefined, {
+          duration: 2500,
         });
-        this.refresh();
+        // Chain: open the box-art picker for the freshly added entry.
+        this.openBoxartPicker(g, { fromUpload: true });
       }
+    });
+  }
+
+  openBoxartPicker(game: LibraryGame, options: { fromUpload?: boolean } = {}): void {
+    const ref = this.dialog.open(BoxartPickerDialogComponent, {
+      data: { game },
+      maxWidth: '95vw',
+      autoFocus: false,
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (result?.selected) {
+        this.snack.open(`Box art set for ${game.display_name}.`, undefined, {
+          duration: 2000,
+        });
+      } else if (options.fromUpload) {
+        // User skipped the picker right after upload — fine, the library
+        // entry still exists, they can come back to it later.
+      }
+      this.refresh();
     });
   }
 
@@ -134,5 +157,10 @@ export class LibraryComponent implements OnInit {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  /** Cache-buster keyed off the row id so a re-selection forces a re-fetch. */
+  boxArtUrl(game: LibraryGame): string {
+    return this.boxart.libraryBoxArtUrl(game.id, game.id);
   }
 }
