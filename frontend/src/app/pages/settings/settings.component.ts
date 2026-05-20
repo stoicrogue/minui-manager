@@ -10,6 +10,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import {
   AppSettings,
@@ -33,6 +34,7 @@ import {
     MatSnackBarModule,
     MatDividerModule,
     MatProgressSpinnerModule,
+    MatTooltipModule,
   ],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
@@ -47,6 +49,7 @@ export class SettingsComponent implements OnInit {
   readonly slotCapInput = signal<number | null>(10);
   readonly loading = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
+  readonly picking = signal<boolean>(false);
 
   ngOnInit(): void {
     this.refresh();
@@ -94,6 +97,29 @@ export class SettingsComponent implements OnInit {
       error: (err) => {
         this.saving.set(false);
         this.snack.open(`Save failed: ${err.message}`, 'Dismiss', { duration: 5000 });
+      },
+    });
+  }
+
+  browseSDPath(): void {
+    this.picking.set(true);
+    this.api.pickSDCardFolder().subscribe({
+      next: ({ path }) => {
+        this.picking.set(false);
+        if (path) {
+          this.sdPathInput.set(path);
+          // Auto-save after a successful pick — the user just told us which
+          // folder they want, so verify immediately rather than making them
+          // click Save next.
+          this.saveSDPath();
+        }
+        // path === null means the user cancelled — leave the input alone.
+      },
+      error: (err) => {
+        this.picking.set(false);
+        this.snack.open(`Could not open folder picker: ${err.message}`, 'Dismiss', {
+          duration: 5000,
+        });
       },
     });
   }

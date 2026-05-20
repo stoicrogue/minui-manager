@@ -51,4 +51,12 @@ export class SettingsService {
   getSDCardStatus(): Observable<SDCardStatusResponse> {
     return this.http.get<SDCardStatusResponse>('/api/sdcard/status');
   }
+
+  /**
+   * Pop a native OS folder picker (via Tk on the backend) and return the
+   * selected absolute path, or null if the user cancelled.
+   */
+  pickSDCardFolder(): Observable<{ path: string | null }> {
+    return this.http.post<{ path: string | null }>('/api/sdcard/pick-folder', {});
+  }
 }

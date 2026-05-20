@@ -39,6 +39,35 @@
   display: block;
 }
 
+.path-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+
+  .full-width {
+    flex: 1 1 360px;
+    min-width: 0;
+  }
+}
+
+.browse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  // Offset so the button visually aligns with the input's outline, not its
+  // floating-label top. Outline form fields have ~8px of label area above.
+  margin-top: 8px;
+  height: 56px;
+  border-color: var(--sw-border-strong) !important;
+  color: var(--sw-cyan) !important;
+}
+
+.browse-btn:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.3);
+  border-color: var(--sw-cyan) !important;
+}
+
 .full-width {
   width: 100%;
   max-width: 520px;
