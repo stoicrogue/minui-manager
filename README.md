@@ -45,6 +45,31 @@ previous game is one click and saves come along for the ride.
   traversal. The card's `.system/`, `.userdata/`, `Bios/`, `Emus/`,
   `Roms_systems/`, and root files are never touched.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="./examples/on-card.png"><img src="./examples/on-card.png" alt="On Card view" /></a><br />
+      <sub><strong>On Card</strong> — the live SD card dashboard. Each tile is one game with its box art, system code, save indicator, and per-game import / remove actions. The header chip shows the slot counter.</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="./examples/find-boxart.png"><img src="./examples/find-boxart.png" alt="Find box art dialog" /></a><br />
+      <sub><strong>Find box art</strong> — fuzzy-matched candidates from <a href="https://github.com/libretro-thumbnails">libretro-thumbnails</a> (and optionally SteamGridDB). Click one to preview; the app normalizes it to 200×300 PNG before saving.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="./examples/send-to-device.png"><img src="./examples/send-to-device.png" alt="Send to device dry-run" /></a><br />
+      <sub><strong>Send to device</strong> — pick which library games to push, see the exact <code>mkdir</code> / <code>copy</code> / <code>write</code> operations the writer will run, then confirm to execute. Nothing touches the card until you click through.</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="./examples/archive.png"><img src="./examples/archive.png" alt="Archive panel" /></a><br />
+      <sub><strong>Archive</strong> — every game removed from the card lands here with its ROM, art, and save bundled in a timestamped folder. <em>Restore</em> copies it back to the library; the trash icon deletes a stale snapshot.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Why this exists
 
 The Five Game Handheld layout looks great on the device but is fiddly to set up
