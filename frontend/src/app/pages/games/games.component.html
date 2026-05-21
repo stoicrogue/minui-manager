@@ -100,10 +100,14 @@
               <div class="badges">
                 <mat-chip class="badge code">{{ game.system_code }}</mat-chip>
                 @if (game.has_save) {
-                  <mat-chip class="badge save" matTooltip="Save file present">
-                    <mat-icon matChipAvatar>save</mat-icon>
-                    Save
-                  </mat-chip>
+                  <button
+                    mat-icon-button
+                    class="save-btn"
+                    matTooltip="Save file present"
+                    style="cursor: default;"
+                  >
+                    <mat-icon>save_outline</mat-icon>
+                  </button>
                 }
                 @if (game.is_malformed) {
                   <mat-chip
@@ -117,7 +121,6 @@
                 <span class="actions-spacer"></span>
                 <button
                   mat-icon-button
-                  class="remove-btn"
                   (click)="openRemove(game)"
                   matTooltip="Archive &amp; remove from device"
                 >
