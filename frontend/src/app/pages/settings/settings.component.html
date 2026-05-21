@@ -165,4 +165,48 @@
       </div>
     </mat-card-content>
   </mat-card>
+
+  <mat-card appearance="outlined" class="card">
+    <mat-card-header>
+      <mat-card-title>SteamGridDB</mat-card-title>
+      <mat-card-subtitle>
+        Optional second box-art source. When a key is set, the picker shows libretro
+        thumbnails <em>and</em> SteamGridDB grids side-by-side. Grab a key at
+        <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" rel="noopener">
+          steamgriddb.com/profile/preferences/api</a>.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="path-row">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>API key</mat-label>
+          <input
+            matInput
+            [type]="sgdbKeyVisible() ? 'text' : 'password'"
+            [ngModel]="sgdbKeyInput()"
+            (ngModelChange)="sgdbKeyInput.set($event)"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="paste your SteamGridDB key"
+          />
+          <button
+            mat-icon-button
+            matSuffix
+            type="button"
+            (click)="toggleSgdbKeyVisible()"
+            [matTooltip]="sgdbKeyVisible() ? 'Hide key' : 'Show key'"
+          >
+            <mat-icon>{{ sgdbKeyVisible() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+      <div class="actions">
+        <button mat-flat-button color="primary" (click)="saveSgdbKey()" [disabled]="saving()">
+          <mat-icon>save</mat-icon>
+          Save
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
 </div>

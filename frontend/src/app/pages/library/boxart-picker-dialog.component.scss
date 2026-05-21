@@ -57,6 +57,63 @@
   font-size: 13px;
 }
 
+.source-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-section + .source-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--sw-border);
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  mat-icon {
+    color: var(--sw-cyan);
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  h3 {
+    margin: 0;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sw-text);
+  }
+
+  .source-detail {
+    color: var(--sw-cyan-soft);
+    font-size: 12px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+  }
+}
+
+.sgdb-section .source-header mat-icon {
+  color: #d4b5ff;
+}
+
+.sgdb-candidate:hover {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.4) !important;
+}
+
+.sgdb-score {
+  color: #d4b5ff !important;
+  border-color: rgba(168, 85, 247, 0.5) !important;
+  background: rgba(168, 85, 247, 0.12) !important;
+}
+
 .meta {
   margin: 0;
   font-size: 12px;

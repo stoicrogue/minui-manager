@@ -4,11 +4,21 @@ import { Observable } from 'rxjs';
 
 import { LibraryGame } from './library.service';
 
+export type BoxartSource = 'libretro' | 'steamgriddb';
+
 export interface BoxartCandidate {
   name: string;
   score: number;
   source_url: string;
-  source: 'libretro';
+  source: BoxartSource;
+  thumb_url?: string | null;
+}
+
+export interface SteamgriddbSection {
+  game_id: number | null;
+  game_name: string | null;
+  candidates: BoxartCandidate[];
+  note: string | null;
 }
 
 export interface BoxartSearchResponse {
@@ -19,6 +29,7 @@ export interface BoxartSearchResponse {
   candidates: BoxartCandidate[];
   cache_hit: boolean;
   note: string | null;
+  steamgriddb: SteamgriddbSection | null;
 }
 
 @Injectable({ providedIn: 'root' })

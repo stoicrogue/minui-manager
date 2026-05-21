@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from app.config import load_settings
 from app.db import session_scope
-from app.services import boxart_libretro
+from app.services import boxart_libretro, boxart_steamgriddb
 from app.services.image_processor import ImageProcessingError, process_image
 from app.services.library_store import get_library_game
 from app.services.system_registry import load_systems
@@ -39,6 +39,16 @@ class CandidateOut(BaseModel):
     score: int
     source_url: str
     source: str = "libretro"
+    thumb_url: str | None = None  # set for SGDB; libretro just uses source_url
+
+
+class SteamgriddbSection(BaseModel):
+    """Optional section returned when the user has set an SGDB API key."""
+
+    game_id: int | None
+    game_name: str | None
+    candidates: list[CandidateOut]
+    note: str | None = None
 
 
 class SearchResponse(BaseModel):
@@ -49,6 +59,7 @@ class SearchResponse(BaseModel):
     candidates: list[CandidateOut]
     cache_hit: bool
     note: str | None = None  # human-readable explanation when there's nothing
+    steamgriddb: SteamgriddbSection | None = None  # null when no API key set
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -58,7 +69,13 @@ def search(
         default=None, alias="query", description="Override the query string."
     ),
 ) -> SearchResponse:
-    """Return up to 5 libretro thumbnail candidates for the given library entry."""
+    """Return libretro + (optionally) SteamGridDB candidates for one library entry.
+
+    The SteamGridDB section is included only when the user has set
+    ``settings.steamgriddb_api_key``. Failures from SGDB never bubble
+    up — they appear as a ``note`` on the section so the libretro half
+    of the picker keeps working.
+    """
     with session_scope() as session:
         game = get_library_game(session, library_id)
         if game is None:
@@ -70,18 +87,22 @@ def search(
                 status_code=500,
                 detail=f"Library entry uses unknown system code '{game.system_code}'.",
             )
+
+        query = (query_override or game.display_name).strip()
+        sgdb_section = _build_sgdb_section(query)
+
         if not system.libretro_repo:
             return SearchResponse(
                 library_id=library_id,
-                query=game.display_name,
+                query=query,
                 system_code=game.system_code,
                 repo=None,
                 candidates=[],
                 cache_hit=False,
                 note=f"No libretro-thumbnails repo configured for {game.system_code}.",
+                steamgriddb=sgdb_section,
             )
 
-        query = (query_override or game.display_name).strip()
         repo = system.libretro_repo
 
         # Cache check: if we have a fresh listing, this avoids a network call.
@@ -99,6 +120,7 @@ def search(
                     candidates=[],
                     cache_hit=False,
                     note=f"GitHub repo libretro-thumbnails/{repo} not found.",
+                    steamgriddb=sgdb_section,
                 )
             raise HTTPException(
                 status_code=502,
@@ -131,7 +153,34 @@ def search(
             ],
             cache_hit=cache_hit,
             note=note,
+            steamgriddb=sgdb_section,
         )
+
+
+def _build_sgdb_section(query: str) -> SteamgriddbSection | None:
+    """Run the SGDB lookup. Returns None when no API key is configured;
+    otherwise returns a section (possibly with an explanatory note and no
+    candidates) so the frontend can always show what happened.
+    """
+    api_key = load_settings().steamgriddb_api_key
+    if not api_key:
+        return None
+    lookup = boxart_steamgriddb.find_candidates(query, api_key)
+    return SteamgriddbSection(
+        game_id=lookup.game.id if lookup.game else None,
+        game_name=lookup.game.name if lookup.game else None,
+        candidates=[
+            CandidateOut(
+                name=c.name,
+                score=c.score,
+                source_url=c.source_url,
+                source=c.source,
+                thumb_url=c.thumb_url,
+            )
+            for c in lookup.candidates
+        ],
+        note=lookup.note,
+    )
 
 
 class SelectRequest(BaseModel):
