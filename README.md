@@ -1,27 +1,77 @@
 # MinUI Game Manager
 
-A local web app for curating a small, focused game library on a Miyoo Mini Plus running MinUI in the "Five Game Handheld" / Game View layout.
+A local web app for curating a small, focused game library on a Miyoo Mini Plus
+running [MinUI](https://github.com/shauninman/MinUI) in the **Five Game Handheld**
+(Game View) layout. Upload a ROM, auto-detect its system, find and resize box
+art, write everything to the SD card in the exact layout MinUI expects, and
+swap games in and out without breaking saves or art.
 
-See [`minui-game-manager-plan.md`](./minui-game-manager-plan.md) for the full plan.
+The SD card is treated as a destination, not as storage — the durable library
+and the archive of removed games live on the laptop, so swapping back to a
+previous game is one click and saves come along for the ride.
 
-## Status
+> Single-user, runs locally, opinionated for a Windows host. See
+> [`minui-game-manager-plan.md`](./minui-game-manager-plan.md) for the full
+> design doc.
 
-**Phase 1: Foundation** — backend (settings + SD card validity check + 14 tests passing) and Angular frontend (Settings page with live SD card status) are both in. Acceptance criterion met against the real `D:\` reference card.
+## Features
+
+- **SD card dashboard** — live grid of what's currently on the card, with box
+  art, system code, save indicator, malformed-game indicator, and a slot
+  counter (e.g. "9 / 10").
+- **Library** — uploaded ROMs not currently on the card, with auto-detected
+  system (parenthesized code → extension → preferred extension fallback) and
+  an editable display name.
+- **Box art lookup** — primary source is
+  [libretro-thumbnails](https://github.com/libretro-thumbnails); fuzzy-matches
+  the ROM filename and ranks the top candidates. Optional SteamGridDB as a
+  secondary source if you supply an API key.
+- **Image processing** — every box art is normalized to a 200×300 PNG (cover /
+  contain / stretch — configurable) before it reaches the card.
+- **Send to device** — dry-run preview, then a single atomic copy that writes
+  the ROM, the `.m3u`, and the box art into the exact MinUI Five-Game layout.
+- **Remove with archive** — removing a game from the card moves the ROM, the
+  `.m3u`, the box art, and any save (both `<game>.m3u.sav` and legacy
+  `<rom>.sav` patterns) into `./data/archive/<CODE>/<game>/<timestamp>/`.
+  Restore to the library in one click.
+- **Library backup** — export the entire library as a zip; re-import a zip on a
+  fresh machine.
+- **Safety rail** — all SD-card writes go through a `SafeSDCardWriter` that
+  refuses any path outside `Roms/` and `Saves/<CODE>/`, and refuses path
+  traversal. The card's `.system/`, `.userdata/`, `Bios/`, `Emus/`,
+  `Roms_systems/`, and root files are never touched.
+
+## Why this exists
+
+The Five Game Handheld layout looks great on the device but is fiddly to set up
+by hand. Each game needs its own `<Display Name> (CODE)` folder under `Roms/`,
+a `.m3u` whose basename matches the folder (saves are bound to it), and a
+shared `Roms/.res/<Display Name> (CODE).png` at exactly 200×300. Getting any of
+that slightly wrong silently breaks saves or box art. This app makes the
+filesystem contract a backend invariant instead of a manual checklist.
+
+## Requirements
+
+- Windows 10/11 (the `make.ps1` task runner assumes PowerShell; the bare
+  `Makefile` works on POSIX but isn't the primary path).
+- Python 3.10+.
+- Node 20+. The `make.ps1` script expects Node at `C:\nodejs\` — adjust the
+  `Use-Node` function near the top of `make.ps1` if yours lives elsewhere.
+- A Miyoo Mini Plus with MinUI BASE + EXTRAS installed, configured for the
+  Five Game Handheld / Game View layout, with its SD card plugged into the
+  host machine.
 
 ## Setup
 
-One-time install (creates `.venv`, installs Python deps + npm deps):
+One-time install (creates `.venv`, installs Python deps + Angular deps):
 
 ```powershell
 .\make.ps1 install
 ```
 
-> Note: Node.js is expected at `C:\nodejs` (the location it's installed on this machine).
-> Adjust the `Use-Node` function in `make.ps1` if your Node lives elsewhere.
-
 ## Run
 
-Open two terminals from the project root:
+Two terminals from the project root:
 
 ```powershell
 # terminal 1 — FastAPI backend on :8000
@@ -31,33 +81,89 @@ Open two terminals from the project root:
 .\make.ps1 frontend
 ```
 
-Then open <http://localhost:4200>. Backend OpenAPI docs at <http://localhost:8000/docs>.
+Then open <http://localhost:4200>. Backend OpenAPI docs at
+<http://localhost:8000/docs>.
+
+First-time use: open **Settings**, point it at your SD card root (e.g. `D:\`)
+using the native folder picker, and confirm the status reads `ok`. Optionally
+paste a SteamGridDB API key if you want it as a secondary box-art source.
 
 ## Test
 
 ```powershell
-.\make.ps1 test          # backend pytest
-.\make.ps1 build         # frontend production build (good smoke test)
+.\make.ps1 test          # backend pytest suite
+.\make.ps1 build         # frontend production build (smoke test)
+.\make.ps1 lint          # ruff
+.\make.ps1 fmt           # ruff format
 ```
 
-## Layout reference
+## SD card layout (target)
 
-The target SD-card layout is documented in detail in `minui-game-manager-plan.md` Section 4. Short version: every game lives in its own `Roms/<Display> (CODE)/` folder containing a ROM and a `.m3u` file; all box art lives in a shared `Roms/.res/` folder. The `.system/` and `Emus/` folders at the SD root identify a card as valid for this app.
+The full filesystem contract is in
+[`minui-game-manager-plan.md`](./minui-game-manager-plan.md) §4. Short version:
+
+```
+<SD_ROOT>/
+├── .system/, Emus/                        # presence of both = "valid" SD card
+├── Roms/
+│   ├── .res/
+│   │   ├── Tetris (FC).png                # one PNG per game, 200×300
+│   │   └── Kirby's Dream Land 2 (GB).png  # named after the GAME FOLDER, not the ROM
+│   ├── Tetris (FC)/
+│   │   ├── Tetris.nes
+│   │   └── Tetris (FC).m3u                # one line: the ROM filename
+│   └── ...
+├── Saves/<CODE>/<game-folder>.m3u.sav     # saves are bound to the .m3u basename
+└── (everything else is left untouched)
+```
+
+Supported systems (codes from the reference card): FC, GB, GBA, GBC, GG, MD,
+MGBA, NGP, NGPC, P8, PCE, PKM, PS, SFC, SGB, SMS, SUPA, VB. See
+[`backend/app/systems.yaml`](./backend/app/systems.yaml) to add or tweak.
 
 ## Project layout
 
 ```
 minui-manager/
-├── backend/                 FastAPI app + pytest
-│   └── app/
-│       ├── routers/         sdcard.py, settings.py
-│       ├── services/        sdcard_validator.py
-│       ├── config.py        Settings model + JSON persistence
-│       └── paths.py         project-local paths (./data/)
-├── frontend/                Angular 19 + Material (Azure Blue theme)
+├── backend/                      FastAPI app + pytest suite
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── config.py             Settings model + JSON persistence
+│   │   ├── paths.py              project-local ./data/ paths
+│   │   ├── systems.yaml          system metadata + extension preferences
+│   │   ├── routers/              sdcard, library, boxart, archive, settings
+│   │   └── services/             validator, reader, writer, sync, remover,
+│   │                             system_detector, library_store, archive_store,
+│   │                             boxart_libretro, boxart_steamgriddb,
+│   │                             image_processor, library_backup, folder_picker
+│   └── tests/                    19 test modules covering the above
+├── frontend/                     Angular 19 + Material (synthwave theme)
 │   └── src/app/
-│       ├── pages/settings/  the Settings page (Phase 1 UI)
-│       └── services/        settings.service.ts (typed API client)
-├── data/                    user settings, library, archive (gitignored)
-└── minui-game-manager-plan.md
+│       ├── pages/                games, library, settings
+│       └── services/             typed API clients
+├── scripts/
+├── data/                         user settings, library, archive (gitignored)
+├── make.ps1                      PowerShell task runner
+├── Makefile                      POSIX equivalent
+├── pyproject.toml
+└── minui-game-manager-plan.md    full design doc
 ```
+
+`./data/` holds everything user-specific — uploaded ROMs, cached box art,
+archived games, `config.json`, `app.db`, and `sync.log`. It is gitignored.
+
+## Status
+
+Phases 1–8 of the [project plan](./minui-game-manager-plan.md) are complete:
+SD card validation, library upload, system auto-detection, libretro and
+SteamGridDB box-art lookup, image normalization, send-to-device, remove with
+archive + restore, and library backup/restore. Manually verified end-to-end
+against a real Miyoo Mini Plus.
+
+## Caveats
+
+- Designed for a single user on one machine. No auth, no multi-tenancy.
+- Only the Five Game Handheld layout is supported. `Roms_systems/` (the
+  parallel per-system tree) is acknowledged on the card but not managed.
+- BIOS files are out of scope — handle those manually.
+- No network/SSH transfer to the device. The SD card has to be plugged in.
