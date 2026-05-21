@@ -274,6 +274,64 @@ def test_select_404_for_unknown_library_id(
     assert r.status_code == 404
 
 
+def test_upload_normalizes_and_writes_box_art(tmp_project_root: Path) -> None:
+    """User-uploaded image is run through the processor and saved as 200x300 PNG."""
+    client = _client(tmp_project_root)
+    lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
+
+    source = _real_png(size=(400, 600), color="blue")
+    r = client.post(
+        "/api/boxart/upload",
+        data={"library_id": str(lib_id)},
+        files={"file": ("user-art.png", source, "image/png")},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == lib_id
+    assert body["has_boxart"] is True
+
+    saved = Path(body["boxart_path"])
+    assert saved.is_file()
+    assert saved.read_bytes() != source
+    with Image.open(saved) as out:
+        assert out.size == (200, 300)
+        assert out.format == "PNG"
+
+
+def test_upload_422_on_undecodable_image(tmp_project_root: Path) -> None:
+    client = _client(tmp_project_root)
+    lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
+
+    r = client.post(
+        "/api/boxart/upload",
+        data={"library_id": str(lib_id)},
+        files={"file": ("junk.png", b"not an image", "image/png")},
+    )
+    assert r.status_code == 422
+    assert "process" in r.json()["detail"].lower()
+
+
+def test_upload_404_for_unknown_library_id(tmp_project_root: Path) -> None:
+    client = _client(tmp_project_root)
+    r = client.post(
+        "/api/boxart/upload",
+        data={"library_id": "999"},
+        files={"file": ("art.png", _real_png(), "image/png")},
+    )
+    assert r.status_code == 404
+
+
+def test_upload_400_on_empty_file(tmp_project_root: Path) -> None:
+    client = _client(tmp_project_root)
+    lib_id = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
+    r = client.post(
+        "/api/boxart/upload",
+        data={"library_id": str(lib_id)},
+        files={"file": ("empty.png", b"", "image/png")},
+    )
+    assert r.status_code == 400
+
+
 def test_serve_box_art_streams_saved_png(
     tmp_project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -29,9 +29,11 @@ previous game is one click and saves come along for the ride.
 - **Box art lookup** — primary source is
   [libretro-thumbnails](https://github.com/libretro-thumbnails); fuzzy-matches
   the ROM filename and ranks the top candidates. Optional SteamGridDB as a
-  secondary source if you supply an API key.
-- **Image processing** — every box art is normalized to a 200×300 PNG (cover /
-  contain / stretch — configurable) before it reaches the card.
+  secondary source if you supply an API key. As a third option, upload your
+  own image when neither source has what you want.
+- **Image processing** — every box art (lookup result or user upload) is
+  normalized to a 200×300 PNG (cover / contain / stretch — configurable)
+  before it reaches the card.
 - **Send to device** — dry-run preview, then a single atomic copy that writes
   the ROM, the `.m3u`, and the box art into the exact MinUI Five-Game layout.
 - **Remove with archive** — removing a game from the card moves the ROM, the
@@ -55,7 +57,7 @@ previous game is one click and saves come along for the ride.
     </td>
     <td width="50%" align="center">
       <a href="./examples/find-boxart.png"><img src="./examples/find-boxart.png" alt="Find box art dialog" /></a><br />
-      <sub><strong>Find box art</strong> — fuzzy-matched candidates from <a href="https://github.com/libretro-thumbnails">libretro-thumbnails</a> (and optionally SteamGridDB). Click one to preview; the app normalizes it to 200×300 PNG before saving.</sub>
+      <sub><strong>Find box art</strong> — fuzzy-matched candidates from <a href="https://github.com/libretro-thumbnails">libretro-thumbnails</a> (and optionally SteamGridDB), plus an upload-your-own fallback. Click one to preview; the app normalizes it to 200×300 PNG before saving.</sub>
     </td>
   </tr>
   <tr>

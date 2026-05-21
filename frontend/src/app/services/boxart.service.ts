@@ -50,6 +50,13 @@ export class BoxartService {
     });
   }
 
+  upload(libraryId: number, file: File): Observable<LibraryGame> {
+    const form = new FormData();
+    form.append('library_id', String(libraryId));
+    form.append('file', file);
+    return this.http.post<LibraryGame>('/api/boxart/upload', form);
+  }
+
   /** URL the frontend can put into <img src> to render a library entry's
    * selected art. Add a cache-buster so updates show immediately. */
   libraryBoxArtUrl(libraryId: number, version?: string | number): string {

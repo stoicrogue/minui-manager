@@ -71,6 +71,45 @@
       }
     </section>
 
+    <section class="source-section upload-section">
+      <header class="source-header">
+        <mat-icon>upload_file</mat-icon>
+        <h3>Upload your own</h3>
+        <span class="source-detail">resized + cropped to match</span>
+      </header>
+      <div
+        class="upload-dropzone"
+        [class.drag-over]="uploadDragOver()"
+        [class.busy]="uploading()"
+        (dragover)="onUploadDragOver($event)"
+        (dragleave)="onUploadDragLeave()"
+        (drop)="onUploadDrop($event)"
+      >
+        @if (uploading()) {
+          <mat-progress-spinner mode="indeterminate" diameter="32"></mat-progress-spinner>
+          <p>Processing image…</p>
+        } @else {
+          <mat-icon>image</mat-icon>
+          <p>Drag an image here, or</p>
+          <input
+            #uploadInput
+            type="file"
+            accept="image/*"
+            (change)="onUploadFileChosen($event)"
+            hidden
+          />
+          <button
+            mat-stroked-button
+            type="button"
+            (click)="uploadInput.click()"
+            [disabled]="busy()"
+          >
+            Choose image
+          </button>
+        }
+      </div>
+    </section>
+
     @if (r.steamgriddb; as sgdb) {
       <section class="source-section sgdb-section">
         <header class="source-header">
@@ -122,5 +161,5 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="skip()" [disabled]="selecting() !== null">Skip for now</button>
+  <button mat-button (click)="skip()" [disabled]="busy()">Skip for now</button>
 </mat-dialog-actions>

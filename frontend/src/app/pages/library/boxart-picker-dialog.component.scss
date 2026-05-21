@@ -103,6 +103,45 @@
   color: #d4b5ff;
 }
 
+.upload-section .source-header mat-icon {
+  color: #b6ffc1;
+}
+
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 24px;
+  border: 2px dashed rgba(120, 255, 153, 0.35);
+  border-radius: 6px;
+  background: rgba(120, 255, 153, 0.04);
+  transition: border-color 0.2s ease, background 0.2s ease;
+
+  mat-icon {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    color: #b6ffc1;
+  }
+
+  p {
+    margin: 0;
+    color: var(--sw-text-dim);
+    font-size: 13px;
+  }
+
+  &.drag-over {
+    border-color: #b6ffc1;
+    background: rgba(120, 255, 153, 0.1);
+    box-shadow: 0 0 18px rgba(120, 255, 153, 0.25);
+  }
+
+  &.busy {
+    cursor: progress;
+  }
+}
+
 .sgdb-candidate:hover {
   border-color: #a855f7 !important;
   box-shadow: 0 0 18px rgba(168, 85, 247, 0.4) !important;

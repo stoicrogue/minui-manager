@@ -3,21 +3,24 @@
 Endpoints:
     GET  /api/boxart/search?library_id=<id>     -> list of candidate thumbnails
     POST /api/boxart/select                      -> download + normalize a chosen candidate
+    POST /api/boxart/upload                      -> user-supplied image, normalize + save
     GET  /api/library/{id}/box-art               -> serve the saved PNG
 
 Selection downloads the picked image, runs it through ``image_processor``
 to resize it to the MinUI 200x300 PNG contract (strategy from user
 settings), strips metadata, and writes the result to
-``./data/library/<CODE>/.res/<game_folder>.png``.
+``./data/library/<CODE>/.res/<game_folder>.png``. Upload follows the
+same normalization path so user-provided art looks identical on device.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -237,6 +240,55 @@ async def select(body: SelectRequest) -> dict[str, object]:
     # Return the fresh public dict so the frontend can refresh its UI.
     with session_scope() as session:
         game = get_library_game(session, body.library_id)
+        assert game is not None
+        return game.to_public_dict()
+
+
+@router.post("/upload")
+async def upload(
+    library_id: Annotated[int, Form(description="LibraryGame id.")],
+    file: Annotated[UploadFile, File(description="User-supplied image.")],
+) -> dict[str, object]:
+    """Save a user-provided image as box art, normalized like search/select.
+
+    Third option for when neither libretro nor SteamGridDB has the right
+    art. The uploaded bytes go through the same processor so the result
+    matches the MinUI 200x300 PNG contract.
+    """
+    with session_scope() as session:
+        game = get_library_game(session, library_id)
+        if game is None:
+            raise HTTPException(status_code=404, detail="Library entry not found.")
+        dest = game.boxart_path
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded image was empty.")
+
+    settings = load_settings()
+    target = (settings.boxart_target_width, settings.boxart_target_height)
+    try:
+        processed = await asyncio.to_thread(
+            process_image, content, target, settings.boxart_resize_strategy
+        )
+    except ImageProcessingError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"Could not process image: {exc}"
+        ) from exc
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(processed)
+    logger.info(
+        "Saved uploaded boxart for library_id=%s (%s) (strategy=%s, size=%sx%s)",
+        library_id,
+        file.filename or "unnamed",
+        settings.boxart_resize_strategy,
+        target[0],
+        target[1],
+    )
+
+    with session_scope() as session:
+        game = get_library_game(session, library_id)
         assert game is not None
         return game.to_public_dict()
 
