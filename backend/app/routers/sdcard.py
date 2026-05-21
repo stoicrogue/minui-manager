@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from app.config import load_settings
 from app.db import session_scope
+from app.services.archive_store import ArchiveError, archive_game
 from app.services.folder_picker import open_folder_dialog
 from app.services.sdcard_reader import (
     SDCardListing,
@@ -169,6 +170,37 @@ async def post_sync(
             "result": result.to_dict(),
         },
     )
+
+
+@router.delete("/games/{game_folder_name}")
+async def remove_game(game_folder_name: str) -> JSONResponse:
+    """Archive the named game off the SD card.
+
+    Copies the game folder, box art, and save file(s) into a fresh
+    timestamped directory under ``./data/archive/`` and deletes the
+    originals from the card. Returns the new ``ArchivedGame`` row.
+    """
+    sd_root = _require_ok_sd_path()
+    registry = load_systems()
+
+    def _do() -> dict[str, object]:
+        with session_scope() as session:
+            row = archive_game(session, sd_root, registry, game_folder_name)
+            return row.to_public_dict()
+
+    try:
+        archived = await asyncio.to_thread(_do)
+    except ArchiveError as exc:
+        status_map = {
+            "not_on_card": 404,
+            "archive_collision": 409,
+            "copy_failed": 500,
+        }
+        return JSONResponse(
+            status_code=status_map.get(exc.code, 400),
+            content={"code": exc.code, "detail": exc.message},
+        )
+    return JSONResponse(status_code=200, content={"archived": archived})
 
 
 @router.get("/box-art")

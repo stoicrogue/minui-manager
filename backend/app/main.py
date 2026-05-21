@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
 from app.paths import ensure_data_dirs
-from app.routers import boxart, library, sdcard, settings
+from app.routers import archive, boxart, library, sdcard, settings
 from app.services.library_store import cleanup_stale_drafts
 
 
@@ -54,3 +54,4 @@ app.include_router(sdcard.router)
 app.include_router(library.router)
 app.include_router(boxart.router)
 app.include_router(boxart.library_extra)
+app.include_router(archive.router)

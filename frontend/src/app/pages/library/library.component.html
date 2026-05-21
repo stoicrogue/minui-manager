@@ -38,6 +38,18 @@
       }
       Refresh
     </button>
+    <button
+      mat-stroked-button
+      (click)="toggleArchivePanel()"
+      [class.archive-active]="archiveOpen()"
+      matTooltip="Restore from archive"
+    >
+      <mat-icon>inventory</mat-icon>
+      Archive
+      @if (archived().length > 0) {
+        <span class="archive-count">{{ archived().length }}</span>
+      }
+    </button>
     <button mat-flat-button color="primary" (click)="openUpload()">
       <mat-icon>upload</mat-icon>
       Upload ROM
@@ -78,6 +90,53 @@
         }
       </mat-chip-set>
     </div>
+  }
+
+  @if (archiveOpen()) {
+    <mat-card appearance="outlined" class="archive-panel">
+      <mat-card-header>
+        <mat-card-title>Archive</mat-card-title>
+        <mat-card-subtitle>
+          Games you've removed from the SD card. Click <em>Restore</em> to copy the ROM
+          and box art back into the library.
+        </mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @if (archived().length === 0) {
+          <p class="archive-empty">Nothing archived yet. When you remove a game from the device, it lands here.</p>
+        } @else {
+          <ul class="archive-list">
+            @for (item of archived(); track item.id) {
+              <li>
+                <div class="archive-meta">
+                  <strong>{{ item.display_name }}</strong>
+                  <mat-chip class="archive-code">{{ item.system_code }}</mat-chip>
+                  @if (item.has_save) {
+                    <mat-chip class="archive-save" matTooltip="Save file archived too">
+                      <mat-icon matChipAvatar>save</mat-icon>
+                      Save
+                    </mat-chip>
+                  }
+                  <span class="archive-when">{{ item.archived_at | date:'short' }}</span>
+                </div>
+                <button
+                  mat-stroked-button
+                  (click)="restoreFromArchive(item)"
+                  [disabled]="restoringId() !== null"
+                >
+                  @if (restoringId() === item.id) {
+                    <mat-progress-spinner mode="indeterminate" diameter="16"></mat-progress-spinner>
+                  } @else {
+                    <mat-icon>restore</mat-icon>
+                  }
+                  Restore
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </mat-card-content>
+    </mat-card>
   }
 
   @if (games().length === 0 && !loading() && !errorMessage()) {

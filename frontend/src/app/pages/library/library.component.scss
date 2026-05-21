@@ -164,6 +164,98 @@
   }
 }
 
+.archive-active {
+  background: rgba(168, 85, 247, 0.15) !important;
+  border-color: rgba(168, 85, 247, 0.5) !important;
+  color: #d4b5ff !important;
+}
+
+.archive-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(168, 85, 247, 0.3);
+  color: #f0e1ff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.archive-panel {
+  margin-bottom: 24px;
+
+  .archive-empty {
+    margin: 0;
+    color: var(--sw-text-dim);
+    font-size: 13px;
+  }
+
+  .archive-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: rgba(13, 5, 33, 0.4);
+      border: 1px solid var(--sw-border);
+      border-radius: 6px;
+    }
+  }
+
+  .archive-meta {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+
+    strong {
+      color: var(--sw-text);
+      font-size: 14px;
+    }
+
+    .archive-when {
+      color: var(--sw-text-dim);
+      font-size: 12px;
+      font-family: 'Fira Code', monospace;
+      margin-left: auto;
+    }
+  }
+
+  .archive-code,
+  .archive-save {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px !important;
+    height: 22px !important;
+    min-height: 22px !important;
+  }
+
+  .archive-code {
+    background: rgba(0, 240, 255, 0.1) !important;
+    border: 1px solid rgba(0, 240, 255, 0.45) !important;
+    color: var(--sw-cyan) !important;
+  }
+
+  .archive-save {
+    background: rgba(120, 255, 153, 0.1) !important;
+    border: 1px solid rgba(120, 255, 153, 0.45) !important;
+    color: #b6ffc1 !important;
+  }
+}
+
 .send-btn {
   background: linear-gradient(135deg, #ff1493 0%, #a855f7 100%) !important;
   color: #fff !important;

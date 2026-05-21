@@ -127,4 +127,24 @@ export class SDCardService {
       { library_ids: libraryIds },
     );
   }
+
+  /** Archive a game off the SD card. */
+  removeGame(gameFolderName: string): Observable<{ archived: ArchivedGame }> {
+    return this.http.delete<{ archived: ArchivedGame }>(
+      `/api/sdcard/games/${encodeURIComponent(gameFolderName)}`,
+    );
+  }
+}
+
+export interface ArchivedGame {
+  id: number;
+  system_code: string;
+  game_folder_name: string;
+  display_name: string;
+  rom_filename: string;
+  archive_path: string;
+  archive_relpath: string;
+  has_save: boolean;
+  has_boxart: boolean;
+  archived_at: string;
 }

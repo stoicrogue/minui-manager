@@ -114,6 +114,15 @@
                     Malformed
                   </mat-chip>
                 }
+                <span class="actions-spacer"></span>
+                <button
+                  mat-icon-button
+                  class="remove-btn"
+                  (click)="openRemove(game)"
+                  matTooltip="Archive &amp; remove from device"
+                >
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
               </div>
             </mat-card-content>
           </mat-card>

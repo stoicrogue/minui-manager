@@ -1,16 +1,16 @@
 """SQLAlchemy models. Phase 3 added LibraryGame; Phase 4 adds the
-libretro-thumbnails listing cache."""
+libretro-thumbnails listing cache; Phase 7 adds ArchivedGame."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app import paths as _paths
 from app.db import Base
-from app.paths import LIBRARY_DIR
 
 
 def _utcnow() -> datetime:
@@ -51,12 +51,12 @@ class LibraryGame(Base):
 
     @property
     def library_path(self) -> Path:
-        return LIBRARY_DIR / self.system_code / self.rom_filename
+        return _paths.LIBRARY_DIR / self.system_code / self.rom_filename
 
     @property
     def boxart_path(self) -> Path:
         # Phase 5 will populate this file; the path is determined now.
-        return LIBRARY_DIR / self.system_code / ".res" / f"{self.game_folder_name}.png"
+        return _paths.LIBRARY_DIR / self.system_code / ".res" / f"{self.game_folder_name}.png"
 
     def to_public_dict(self) -> dict[str, object]:
         return {
@@ -86,3 +86,54 @@ class LibretroListingCache(Base):
     repo: Mapped[str] = mapped_column(String(256), primary_key=True)
     listing_json: Mapped[str] = mapped_column(Text, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+
+class ArchivedGame(Base):
+    """A game that was removed from the SD card and bundled into ./data/archive/.
+
+    Each row points at a timestamped archive directory on disk that
+    holds the ROM, .m3u, box art, and any save files that were on the
+    card at remove time. ``archive_relpath`` is relative to
+    :data:`app.paths._paths.ARCHIVE_DIR` so the archive remains valid if the
+    project root moves.
+    """
+
+    __tablename__ = "archived_games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    system_code: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    game_folder_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    rom_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    archive_relpath: Mapped[str] = mapped_column(String(1024), nullable=False)
+    has_save: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    has_boxart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    archived_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    @property
+    def archive_path(self) -> Path:
+        return _paths.ARCHIVE_DIR / self.archive_relpath
+
+    @property
+    def archived_rom_path(self) -> Path:
+        """ROM lives inside the archived game folder."""
+        return self.archive_path / self.game_folder_name / self.rom_filename
+
+    @property
+    def archived_boxart_path(self) -> Path:
+        """Box art sits at the top of the archive dir, named after the folder."""
+        return self.archive_path / f"{self.game_folder_name}.png"
+
+    def to_public_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "system_code": self.system_code,
+            "game_folder_name": self.game_folder_name,
+            "display_name": self.display_name,
+            "rom_filename": self.rom_filename,
+            "archive_path": str(self.archive_path),
+            "archive_relpath": self.archive_relpath,
+            "has_save": self.has_save,
+            "has_boxart": self.has_boxart,
+            "archived_at": self.archived_at.isoformat(),
+        }

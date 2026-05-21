@@ -29,6 +29,7 @@ _RELOAD_ORDER = (
     "app.routers.sdcard",
     "app.routers.library",
     "app.routers.boxart",
+    "app.routers.archive",
     "app.main",
 )
 

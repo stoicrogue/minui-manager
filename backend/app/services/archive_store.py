@@ -1,0 +1,255 @@
+"""Archive store — remove a game from the SD card and restore it later.
+
+Layout under ``./data/archive/``::
+
+    <CODE>/<game-folder>/<YYYY-MM-DDTHH-MM-SS>/
+        <game-folder>/                    # whole Roms/<game-folder> tree
+            <rom-file>
+            <game-folder>.m3u
+        <game-folder>.png                 # box art (if it was on the card)
+        <game-folder>.m3u.sav             # save (new format, if present)
+        <rom-filename>.sav                # save (legacy format, if present)
+
+Each archive directory is self-contained: the user can zip it, ship it,
+or restore it back into the library — no DB-only state.
+
+Failure model: copy-then-commit-then-delete.
+
+1. Copy every file from the card into the archive directory.
+2. Insert the ``ArchivedGame`` row and commit.
+3. Delete the originals from the card.
+
+If step 3 fails partway, the archive is complete and the card may have
+duplicates — the user can manually clean those up, and the archive is
+still restorable. The opposite failure (delete-without-archive) is the
+nightmare scenario; this ordering eliminates it.
+"""
+
+from __future__ import annotations
+
+import logging
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+
+from sqlalchemy import desc, select
+from sqlalchemy.orm import Session
+
+from app import paths as _paths
+from app.models import ArchivedGame, LibraryGame
+from app.services.sdcard_reader import SAVES_DIR, scan_games
+from app.services.sdcard_remover import (
+    SafeSDCardRemover,
+    SDCardRemoveError,
+    make_archive_timestamp,
+)
+from app.services.system_registry import SystemRegistry
+
+logger = logging.getLogger(__name__)
+
+
+class ArchiveError(Exception):
+    """Surfaced by the router as a 4xx."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+# ---------------------------------------------------------------------------
+# Archive (remove from card)
+# ---------------------------------------------------------------------------
+
+
+def archive_game(
+    session: Session,
+    sd_root: Path,
+    registry: SystemRegistry,
+    game_folder_name: str,
+) -> ArchivedGame:
+    """Move a game off the SD card into a fresh archive directory."""
+    games = scan_games(sd_root, registry)
+    target = next((g for g in games if g.game_folder_name == game_folder_name), None)
+    if target is None:
+        raise ArchiveError(
+            "not_on_card", f"No game folder named {game_folder_name!r} on the card."
+        )
+
+    code = target.system_code
+    timestamp = make_archive_timestamp()
+    archive_relpath = f"{code}/{game_folder_name}/{timestamp}"
+    archive_dir = _paths.ARCHIVE_DIR / archive_relpath
+    if archive_dir.exists():
+        # Vanishingly unlikely in practice (timestamps are second-resolution),
+        # but defensive — never let an existing path silently overwrite.
+        raise ArchiveError(
+            "archive_collision",
+            f"Archive path already exists: {archive_dir}.",
+        )
+    archive_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    remover = SafeSDCardRemover(sd_root, _paths.ARCHIVE_DIR)
+
+    copied_sources: list[str] = []
+    has_save = False
+    has_boxart = False
+
+    try:
+        # 1. The game folder itself (rom + m3u).
+        folder_rel = f"Roms/{game_folder_name}"
+        remover.copy_out(folder_rel, archive_dir / game_folder_name)
+        copied_sources.append(folder_rel)
+
+        # 2. Box art, if present.
+        if target.has_boxart:
+            art_rel = f"Roms/.res/{game_folder_name}.png"
+            remover.copy_out(art_rel, archive_dir / f"{game_folder_name}.png")
+            copied_sources.append(art_rel)
+            has_boxart = True
+
+        # 3. Saves — both formats. The reference card has examples of each.
+        save_via_m3u_rel = f"{SAVES_DIR}/{code}/{game_folder_name}.m3u.sav"
+        if (sd_root / save_via_m3u_rel).is_file():
+            remover.copy_out(
+                save_via_m3u_rel, archive_dir / f"{game_folder_name}.m3u.sav"
+            )
+            copied_sources.append(save_via_m3u_rel)
+            has_save = True
+        if target.rom_filename:
+            save_via_rom_rel = f"{SAVES_DIR}/{code}/{target.rom_filename}.sav"
+            if (sd_root / save_via_rom_rel).is_file():
+                remover.copy_out(
+                    save_via_rom_rel, archive_dir / f"{target.rom_filename}.sav"
+                )
+                copied_sources.append(save_via_rom_rel)
+                has_save = True
+    except (SDCardRemoveError, OSError) as exc:
+        # Roll back: nuke the partially-built archive dir.
+        shutil.rmtree(archive_dir, ignore_errors=True)
+        raise ArchiveError("copy_failed", f"Could not archive: {exc}") from exc
+
+    # 4. Insert + commit BEFORE the destructive delete step. If the delete
+    # fails afterward, we still have a valid archive entry; the worst case
+    # is a duplicate game on the card that the user can re-remove.
+    row = ArchivedGame(
+        system_code=code,
+        game_folder_name=game_folder_name,
+        display_name=target.display_name,
+        rom_filename=target.rom_filename or "",
+        archive_relpath=archive_relpath,
+        has_save=has_save,
+        has_boxart=has_boxart,
+        archived_at=datetime.now(timezone.utc),
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+
+    # 5. Delete originals.
+    try:
+        for src in copied_sources:
+            remover.delete(src)
+    except (SDCardRemoveError, OSError):
+        logger.exception(
+            "Archive copy succeeded but card cleanup failed for %s — "
+            "user may need to remove leftovers manually.",
+            game_folder_name,
+        )
+        # Don't raise: the archive is complete and the DB row exists. The
+        # user's data is safe; only cleanup is incomplete.
+
+    return row
+
+
+# ---------------------------------------------------------------------------
+# Listing
+# ---------------------------------------------------------------------------
+
+
+def list_archived(session: Session, limit: int | None = None) -> list[ArchivedGame]:
+    """Return archived games, most-recent first."""
+    stmt = select(ArchivedGame).order_by(desc(ArchivedGame.archived_at))
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list(session.scalars(stmt))
+
+
+def get_archived(session: Session, archive_id: int) -> ArchivedGame | None:
+    return session.get(ArchivedGame, archive_id)
+
+
+# ---------------------------------------------------------------------------
+# Restore (back into library)
+# ---------------------------------------------------------------------------
+
+
+def restore_to_library(session: Session, archive_id: int) -> LibraryGame:
+    """Copy the archived ROM (+ art if present) into the library.
+
+    Idempotent: if a library entry with the same (system_code,
+    display_name) or (system_code, rom_filename) already exists, the
+    files are still re-copied (so a corrupted library file gets healed)
+    and the existing row is returned without modification. The archive
+    directory is left intact so re-restore is possible.
+
+    Raises :class:`ArchiveError` if the archive itself is missing files
+    (the user moved or deleted them manually).
+    """
+    archived = get_archived(session, archive_id)
+    if archived is None:
+        raise ArchiveError("not_found", f"No archived game with id {archive_id}.")
+
+    rom_src = archived.archived_rom_path
+    if not rom_src.is_file():
+        raise ArchiveError(
+            "archive_missing",
+            f"ROM file is missing from the archive at {rom_src}. The archive "
+            "may have been moved or deleted outside the app.",
+        )
+
+    code = archived.system_code
+    rom_filename = archived.rom_filename
+    display_name = archived.display_name
+
+    # Re-copy ROM (overwrite if present).
+    library_system_dir = _paths.LIBRARY_DIR / code
+    library_system_dir.mkdir(parents=True, exist_ok=True)
+    rom_dest = library_system_dir / rom_filename
+    shutil.copy2(rom_src, rom_dest)
+
+    # Re-copy art if it's in the archive.
+    art_src = archived.archived_boxart_path
+    if art_src.is_file():
+        res_dir = library_system_dir / ".res"
+        res_dir.mkdir(parents=True, exist_ok=True)
+        art_dest = res_dir / f"{archived.game_folder_name}.png"
+        shutil.copy2(art_src, art_dest)
+
+    # Look up existing library row by either unique key.
+    existing = session.scalar(
+        select(LibraryGame).where(
+            LibraryGame.system_code == code,
+            LibraryGame.rom_filename == rom_filename,
+        )
+    )
+    if existing is None:
+        existing = session.scalar(
+            select(LibraryGame).where(
+                LibraryGame.system_code == code,
+                LibraryGame.display_name == display_name,
+            )
+        )
+
+    if existing is not None:
+        return existing
+
+    row = LibraryGame(
+        system_code=code,
+        rom_filename=rom_filename,
+        display_name=display_name,
+        size_bytes=rom_dest.stat().st_size,
+    )
+    session.add(row)
+    session.flush()
+    return row

@@ -1,0 +1,67 @@
+<h2 mat-dialog-title>
+  Remove from device
+  <span class="subtitle">{{ data.game.display_name }} ({{ data.game.system_code }})</span>
+</h2>
+
+<mat-dialog-content class="body">
+  <p>
+    The following will be moved to the archive on your laptop. The game disappears from
+    the card but everything stays restorable from the Library page.
+  </p>
+
+  <ul class="will-archive">
+    <li>
+      <mat-icon>folder</mat-icon>
+      <span class="label">Game folder</span>
+      <span class="path">Roms/{{ data.game.game_folder_name }}/</span>
+    </li>
+    @if (data.game.has_boxart) {
+      <li>
+        <mat-icon>image</mat-icon>
+        <span class="label">Box art</span>
+        <span class="path">Roms/.res/{{ data.game.game_folder_name }}.png</span>
+      </li>
+    } @else {
+      <li class="muted">
+        <mat-icon>image_not_supported</mat-icon>
+        <span class="label">Box art</span>
+        <span class="path">(none on card)</span>
+      </li>
+    }
+    @if (data.game.has_save) {
+      <li>
+        <mat-icon>save</mat-icon>
+        <span class="label">Save file</span>
+        <span class="path">{{ data.game.save_path }}</span>
+      </li>
+    } @else {
+      <li class="muted">
+        <mat-icon>save_alt</mat-icon>
+        <span class="label">Save file</span>
+        <span class="path">(no save yet)</span>
+      </li>
+    }
+  </ul>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()" [disabled]="working()">Cancel</button>
+  <button
+    mat-flat-button
+    color="warn"
+    (click)="confirm()"
+    [disabled]="working()"
+    class="remove-btn"
+  >
+    @if (working()) {
+      <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+    } @else {
+      <mat-icon>archive</mat-icon>
+    }
+    Archive &amp; remove
+  </button>
+</mat-dialog-actions>

@@ -7,9 +7,12 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 
 import { SDCardGame, SDCardListing, SDCardService } from '../../services/sdcard.service';
+import { RemoveGameDialogComponent } from './remove-game-dialog.component';
 
 interface NotReadyDetail {
   code: string;
@@ -29,12 +32,16 @@ interface NotReadyDetail {
     MatButtonModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatDialogModule,
+    MatSnackBarModule,
   ],
   templateUrl: './games.component.html',
   styleUrl: './games.component.scss',
 })
 export class GamesComponent implements OnInit {
   private readonly api = inject(SDCardService);
+  private readonly dialog = inject(MatDialog);
+  private readonly snack = inject(MatSnackBar);
 
   readonly listing = signal<SDCardListing | null>(null);
   readonly loading = signal<boolean>(false);
@@ -85,5 +92,23 @@ export class GamesComponent implements OnInit {
 
   trackByFolder(_index: number, game: SDCardGame): string {
     return game.game_folder_name;
+  }
+
+  openRemove(game: SDCardGame): void {
+    const ref = this.dialog.open(RemoveGameDialogComponent, {
+      data: { game },
+      maxWidth: '90vw',
+      autoFocus: false,
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (result?.removed) {
+        this.snack.open(
+          `Archived ${game.display_name}. You can restore it from the Library page.`,
+          undefined,
+          { duration: 4000 },
+        );
+        this.refresh();
+      }
+    });
   }
 }

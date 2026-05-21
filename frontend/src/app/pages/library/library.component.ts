@@ -12,6 +12,8 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 
 import { LibraryGame, LibraryService } from '../../services/library.service';
 import { BoxartService } from '../../services/boxart.service';
+import { ArchiveService } from '../../services/archive.service';
+import { ArchivedGame } from '../../services/sdcard.service';
 import { UploadDialogComponent } from './upload-dialog.component';
 import { BoxartPickerDialogComponent } from './boxart-picker-dialog.component';
 import { SendToDeviceDialogComponent } from './send-to-device-dialog.component';
@@ -37,6 +39,7 @@ import { SendToDeviceDialogComponent } from './send-to-device-dialog.component';
 export class LibraryComponent implements OnInit {
   private readonly api = inject(LibraryService);
   private readonly boxart = inject(BoxartService);
+  private readonly archive = inject(ArchiveService);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
 
@@ -52,6 +55,9 @@ export class LibraryComponent implements OnInit {
   readonly selectedIds = signal<Set<number>>(new Set());
   readonly selectedCount = computed(() => this.selectedIds().size);
   readonly hasSelection = computed(() => this.selectedCount() > 0);
+  readonly archived = signal<ArchivedGame[]>([]);
+  readonly restoringId = signal<number | null>(null);
+  readonly archiveOpen = signal<boolean>(false);
 
   readonly systemFilters = computed(() => {
     const codes = new Set(this.games().map((g) => g.system_code));
@@ -65,6 +71,45 @@ export class LibraryComponent implements OnInit {
 
   ngOnInit(): void {
     this.refresh();
+    this.refreshArchive();
+  }
+
+  refreshArchive(): void {
+    this.archive.list(20).subscribe({
+      next: (r) => this.archived.set(r.archived),
+      error: () => {
+        // Archive listing isn't critical — sidebar just stays empty.
+      },
+    });
+  }
+
+  toggleArchivePanel(): void {
+    this.archiveOpen.update((v) => !v);
+    if (this.archiveOpen()) this.refreshArchive();
+  }
+
+  restoreFromArchive(item: ArchivedGame): void {
+    this.restoringId.set(item.id);
+    this.archive.restoreToLibrary(item.id).subscribe({
+      next: (r) => {
+        this.restoringId.set(null);
+        const g = r.library_game;
+        this.snack.open(
+          `${g.display_name} restored to the library.`,
+          undefined,
+          { duration: 3000 },
+        );
+        this.refresh();
+      },
+      error: (err) => {
+        this.restoringId.set(null);
+        this.snack.open(
+          `Restore failed: ${err.error?.detail ?? err.message ?? 'unknown error'}`,
+          'Dismiss',
+          { duration: 5000 },
+        );
+      },
+    });
   }
 
   refresh(): void {
