@@ -184,6 +184,62 @@ def get_archived(session: Session, archive_id: int) -> ArchivedGame | None:
 # ---------------------------------------------------------------------------
 
 
+def delete_archived(session: Session, archive_id: int) -> ArchivedGame:
+    """Permanently delete an archived game (DB row + on-disk bundle).
+
+    Useful for trimming the archive list when the same game has been
+    cycled through the card multiple times. The DB row is dropped even
+    if the on-disk directory is already missing (treated as already
+    cleaned-up). Returns the row that was deleted so the caller can
+    report what went away.
+
+    Raises :class:`ArchiveError` (``not_found``) if no row exists.
+    """
+    archived = get_archived(session, archive_id)
+    if archived is None:
+        raise ArchiveError("not_found", f"No archived game with id {archive_id}.")
+
+    # Snapshot fields before delete so the return value is still usable
+    # after the session detaches the row.
+    archive_dir = archived.archive_path
+
+    # Guard against an empty/odd archive_relpath that could resolve outside
+    # ./data/archive/. Belt-and-braces: rmtree below would explode anyway
+    # if the path isn't real, but a typed-up relpath could theoretically
+    # escape, and we don't want that even in a single-user tool.
+    try:
+        archive_dir.resolve(strict=False).relative_to(_paths.ARCHIVE_DIR.resolve(strict=False))
+    except ValueError:
+        raise ArchiveError(
+            "unsafe_path",
+            f"Refusing to delete archive at {archive_dir} — path escapes the archive root.",
+        )
+
+    if archive_dir.is_dir():
+        try:
+            shutil.rmtree(archive_dir)
+        except OSError as exc:
+            raise ArchiveError(
+                "delete_failed",
+                f"Could not remove archive directory {archive_dir}: {exc}",
+            ) from exc
+        # Try to clean up the empty `<CODE>/<game-folder>/` parent if no
+        # sibling timestamps remain. Best-effort only.
+        parent = archive_dir.parent
+        try:
+            if parent.is_dir() and not any(parent.iterdir()):
+                parent.rmdir()
+                grandparent = parent.parent
+                if grandparent.is_dir() and not any(grandparent.iterdir()):
+                    grandparent.rmdir()
+        except OSError:
+            pass
+
+    session.delete(archived)
+    session.flush()
+    return archived
+
+
 def restore_to_library(session: Session, archive_id: int) -> LibraryGame:
     """Copy the archived ROM (+ art if present) into the library.
 

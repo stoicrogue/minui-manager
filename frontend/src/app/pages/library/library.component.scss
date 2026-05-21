@@ -254,6 +254,20 @@
     border: 1px solid rgba(120, 255, 153, 0.45) !important;
     color: #b6ffc1 !important;
   }
+
+  .archive-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .archive-delete-btn {
+    color: var(--sw-text-dim);
+
+    &:not([disabled]):hover {
+      color: var(--sw-pink-soft);
+    }
+  }
 }
 
 .send-btn {

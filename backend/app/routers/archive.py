@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.db import session_scope
 from app.services.archive_store import (
     ArchiveError,
+    delete_archived,
     get_archived,
     list_archived,
     restore_to_library,
@@ -36,6 +37,30 @@ def get_archive_entry(archive_id: int) -> dict[str, object]:
         if row is None:
             raise HTTPException(status_code=404, detail="No archived game with that id.")
         return row.to_public_dict()
+
+
+@router.delete("/{archive_id}")
+def delete_archive_entry(archive_id: int) -> dict[str, object]:
+    """Permanently delete an archived game (DB row + on-disk bundle).
+
+    Lets the user trim the archive list when a game has been cycled on
+    and off the card several times and the older snapshots are no
+    longer useful.
+    """
+    with session_scope() as session:
+        try:
+            row = delete_archived(session, archive_id)
+            payload = row.to_public_dict()
+        except ArchiveError as exc:
+            status_map = {
+                "not_found": 404,
+                "unsafe_path": 400,
+                "delete_failed": 500,
+            }
+            raise HTTPException(
+                status_code=status_map.get(exc.code, 400), detail=exc.message
+            ) from exc
+        return {"deleted": payload}
 
 
 @router.post("/{archive_id}/restore-to-library")

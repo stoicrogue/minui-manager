@@ -119,18 +119,29 @@
                   }
                   <span class="archive-when">{{ item.archived_at | date:'short' }}</span>
                 </div>
-                <button
-                  mat-stroked-button
-                  (click)="restoreFromArchive(item)"
-                  [disabled]="restoringId() !== null"
-                >
-                  @if (restoringId() === item.id) {
-                    <mat-progress-spinner mode="indeterminate" diameter="16"></mat-progress-spinner>
-                  } @else {
-                    <mat-icon>restore</mat-icon>
-                  }
-                  Restore
-                </button>
+                <div class="archive-actions">
+                  <button
+                    mat-stroked-button
+                    (click)="restoreFromArchive(item)"
+                    [disabled]="restoringId() !== null"
+                  >
+                    @if (restoringId() === item.id) {
+                      <mat-progress-spinner mode="indeterminate" diameter="16"></mat-progress-spinner>
+                    } @else {
+                      <mat-icon>restore</mat-icon>
+                    }
+                    Restore
+                  </button>
+                  <button
+                    mat-icon-button
+                    (click)="openDeleteArchive(item)"
+                    [disabled]="restoringId() !== null"
+                    matTooltip="Delete this archive entry"
+                    class="archive-delete-btn"
+                  >
+                    <mat-icon>delete_forever</mat-icon>
+                  </button>
+                </div>
               </li>
             }
           </ul>

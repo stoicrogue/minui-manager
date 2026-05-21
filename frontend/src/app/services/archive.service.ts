@@ -21,4 +21,9 @@ export class ArchiveService {
       {},
     );
   }
+
+  /** Permanently delete an archived game (DB row + on-disk bundle). */
+  delete(archiveId: number): Observable<{ deleted: ArchivedGame }> {
+    return this.http.delete<{ deleted: ArchivedGame }>(`/api/archive/${archiveId}`);
+  }
 }

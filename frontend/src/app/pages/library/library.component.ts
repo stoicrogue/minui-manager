@@ -17,6 +17,7 @@ import { ArchivedGame } from '../../services/sdcard.service';
 import { UploadDialogComponent } from './upload-dialog.component';
 import { BoxartPickerDialogComponent } from './boxart-picker-dialog.component';
 import { SendToDeviceDialogComponent } from './send-to-device-dialog.component';
+import { DeleteArchiveDialogComponent } from './delete-archive-dialog.component';
 
 @Component({
   selector: 'app-library-page',
@@ -86,6 +87,24 @@ export class LibraryComponent implements OnInit {
   toggleArchivePanel(): void {
     this.archiveOpen.update((v) => !v);
     if (this.archiveOpen()) this.refreshArchive();
+  }
+
+  openDeleteArchive(item: ArchivedGame): void {
+    const ref = this.dialog.open(DeleteArchiveDialogComponent, {
+      data: { item },
+      maxWidth: '90vw',
+      autoFocus: false,
+    });
+    ref.afterClosed().subscribe((result) => {
+      if (result?.deleted) {
+        this.snack.open(
+          `Deleted archived ${item.display_name} (${item.system_code}).`,
+          undefined,
+          { duration: 3000 },
+        );
+        this.refreshArchive();
+      }
+    });
   }
 
   restoreFromArchive(item: ArchivedGame): void {

@@ -1,0 +1,65 @@
+<h2 mat-dialog-title>
+  Delete from archive
+  <span class="subtitle">{{ data.item.display_name }} ({{ data.item.system_code }})</span>
+</h2>
+
+<mat-dialog-content class="body">
+  <p>
+    Permanently delete this archive snapshot. The on-disk bundle and the entry in the
+    list will both be removed. <strong>This can't be undone.</strong>
+  </p>
+
+  <ul class="will-delete">
+    <li>
+      <mat-icon>schedule</mat-icon>
+      <span class="label">Archived</span>
+      <span class="value">{{ data.item.archived_at | date:'medium' }}</span>
+    </li>
+    <li>
+      <mat-icon>folder_delete</mat-icon>
+      <span class="label">On disk</span>
+      <span class="value path">{{ data.item.archive_relpath }}/</span>
+    </li>
+    @if (data.item.has_save) {
+      <li>
+        <mat-icon>save</mat-icon>
+        <span class="label">Save</span>
+        <span class="value">Included in this snapshot — will be deleted.</span>
+      </li>
+    }
+    @if (data.item.has_boxart) {
+      <li>
+        <mat-icon>image</mat-icon>
+        <span class="label">Box art</span>
+        <span class="value">Included in this snapshot — will be deleted.</span>
+      </li>
+    }
+  </ul>
+
+  <p class="hint">
+    The ROM and box art currently in your library (if any) are <em>not</em> affected —
+    deleting an archive entry only removes this specific snapshot.
+  </p>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()" [disabled]="working()">Cancel</button>
+  <button
+    mat-flat-button
+    color="warn"
+    (click)="confirm()"
+    [disabled]="working()"
+    class="delete-btn"
+  >
+    @if (working()) {
+      <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+    } @else {
+      <mat-icon>delete_forever</mat-icon>
+    }
+    Delete permanently
+  </button>
+</mat-dialog-actions>

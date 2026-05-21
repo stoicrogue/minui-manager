@@ -294,3 +294,105 @@ def test_restore_404_when_archive_id_unknown(
     _set_sd(client, fake_sd_card)
     r = client.post("/api/archive/9999/restore-to-library")
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Delete an archive
+# ---------------------------------------------------------------------------
+
+
+def test_delete_archive_removes_row_and_on_disk_bundle(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """Happy path: archive a game, then delete the archive. Both the DB row
+    and the on-disk bundle should be gone, but the SD card stays untouched."""
+    _seed_card_with_game(fake_sd_card, with_art=True, with_save_m3u=True)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    archive_dir = Path(archived["archive_path"])
+    assert archive_dir.is_dir()
+
+    r = client.delete(f"/api/archive/{archived['id']}")
+    assert r.status_code == 200, r.text
+    body = r.json()["deleted"]
+    assert body["id"] == archived["id"]
+    assert body["game_folder_name"] == "Tetris (GB)"
+
+    # On-disk bundle gone.
+    assert not archive_dir.exists()
+    # DB row gone.
+    listing = client.get("/api/archive").json()["archived"]
+    assert all(item["id"] != archived["id"] for item in listing)
+
+
+def test_delete_archive_404_when_id_unknown(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+    r = client.delete("/api/archive/9999")
+    assert r.status_code == 404
+
+
+def test_delete_archive_still_removes_row_when_dir_already_gone(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """If the user wiped ./data/archive/... manually, deleting the entry
+    should still clean up the orphan DB row (no resurrection)."""
+    _seed_card_with_game(fake_sd_card)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    # Sabotage: nuke the archive dir behind the app's back.
+    import shutil
+
+    shutil.rmtree(Path(archived["archive_path"]))
+
+    r = client.delete(f"/api/archive/{archived['id']}")
+    assert r.status_code == 200
+    # Row should be gone from the listing.
+    listing = client.get("/api/archive").json()["archived"]
+    assert all(item["id"] != archived["id"] for item in listing)
+
+
+def test_delete_one_archive_leaves_sibling_archives_alone(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """When the same game has been cycled through the card twice, deleting
+    one timestamp should not touch the other."""
+    import time
+
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+
+    # First cycle: seed → remove (archive #1).
+    _seed_card_with_game(fake_sd_card, folder="Chrono (SFC)", rom="Chrono.sfc", code="SFC")
+    first = client.delete("/api/sdcard/games/Chrono (SFC)").json()["archived"]
+
+    # Bump the wall clock a smidge so the timestamp suffix differs. Archive
+    # paths are second-resolution, so this is the minimum gap.
+    time.sleep(1.1)
+
+    # Second cycle: re-seed → remove (archive #2).
+    _seed_card_with_game(fake_sd_card, folder="Chrono (SFC)", rom="Chrono.sfc", code="SFC")
+    second = client.delete("/api/sdcard/games/Chrono (SFC)").json()["archived"]
+
+    assert first["id"] != second["id"]
+    first_dir = Path(first["archive_path"])
+    second_dir = Path(second["archive_path"])
+    assert first_dir.is_dir() and second_dir.is_dir()
+
+    # Delete the first archive; the second should be untouched.
+    r = client.delete(f"/api/archive/{first['id']}")
+    assert r.status_code == 200
+    assert not first_dir.exists()
+    assert second_dir.is_dir()
+
+    # Listing still has the second.
+    listing = client.get("/api/archive").json()["archived"]
+    ids = {item["id"] for item in listing}
+    assert second["id"] in ids
+    assert first["id"] not in ids
