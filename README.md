@@ -191,3 +191,16 @@ against a real Miyoo Mini Plus.
   parallel per-system tree) is acknowledged on the card but not managed.
 - BIOS files are out of scope — handle those manually.
 - No network/SSH transfer to the device. The SD card has to be plugged in.
+
+## Credits
+
+The "Five Game Handheld" concept this app automates comes from Russ at
+[Retro Game Corps](https://retrogamecorps.com/) — specifically his
+[MinUI starter guide](https://retrogamecorps.com/2025/10/24/minui-starter-guide/),
+which spells out the curated-grid layout, the shared `Roms/.res/` box-art
+trick, and the `.m3u`-based save binding that this app encodes as filesystem
+invariants. Highly recommended reading if you're new to MinUI.
+
+The on-device experience itself is [MinUI](https://github.com/shauninman/MinUI)
+by Shaun Inman, and the box-art catalog this app's primary lookup uses is
+[libretro-thumbnails](https://github.com/libretro-thumbnails).
