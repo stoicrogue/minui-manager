@@ -204,6 +204,24 @@ def test_list_archived_returns_most_recent_first(
     assert names == ["B (GB)", "A (GB)"]
 
 
+def test_archived_at_iso_string_has_utc_offset(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """The wire format must include a timezone suffix so the browser parses
+    it as UTC instead of (incorrectly) as local time. Without this, the
+    Angular date pipe shifts the displayed timestamp by the user's UTC
+    offset."""
+    _seed_card_with_game(fake_sd_card)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    ts = archived["archived_at"]
+    # Acceptable UTC suffixes: "Z" or "+00:00".
+    assert ts.endswith("+00:00") or ts.endswith("Z"), (
+        f"archived_at is missing a timezone suffix: {ts!r}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Restore to library
 # ---------------------------------------------------------------------------

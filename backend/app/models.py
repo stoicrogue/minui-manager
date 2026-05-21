@@ -17,6 +17,23 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _iso_utc(dt: datetime) -> str:
+    """Serialize a datetime as an ISO 8601 string with explicit UTC offset.
+
+    The SQLAlchemy ``DateTime`` columns here store wall-clock UTC but strip
+    the tzinfo on round-trip via SQLite. Calling ``.isoformat()`` on a naive
+    datetime produces a string without a timezone suffix, which the browser
+    then parses as **local** time -- making UTC timestamps render shifted by
+    the user's UTC offset. Forcing the UTC tzinfo before isoformat fixes
+    that: the wire format becomes ``2026-05-21T18:00:00+00:00`` which JS
+    parses as UTC and the Angular ``date`` pipe converts to local time for
+    display.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
 class LibraryGame(Base):
     """A ROM that's been uploaded to the laptop library.
 
@@ -66,7 +83,7 @@ class LibraryGame(Base):
             "display_name": self.display_name,
             "game_folder_name": self.game_folder_name,
             "size_bytes": self.size_bytes,
-            "added_at": self.added_at.isoformat(),
+            "added_at": _iso_utc(self.added_at),
             "library_path": str(self.library_path),
             "has_boxart": self.boxart_path.is_file(),
             "boxart_path": str(self.boxart_path) if self.boxart_path.is_file() else None,
@@ -135,5 +152,5 @@ class ArchivedGame(Base):
             "archive_relpath": self.archive_relpath,
             "has_save": self.has_save,
             "has_boxart": self.has_boxart,
-            "archived_at": self.archived_at.isoformat(),
+            "archived_at": _iso_utc(self.archived_at),
         }
