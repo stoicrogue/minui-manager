@@ -43,7 +43,7 @@ switch ($Target) {
         Use-Venv
         $distIndex = "frontend\dist\minui-manager-ui\browser\index.html"
         if (-not (Test-Path $distIndex)) {
-            Write-Host "No frontend build found — building (this is a one-time cost)..."
+            Write-Host "No frontend build found -- building (this is a one-time cost)..."
             Use-Node
             Push-Location frontend
             try { ng build } finally { Pop-Location }
