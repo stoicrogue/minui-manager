@@ -71,22 +71,42 @@ One-time install (creates `.venv`, installs Python deps + Angular deps):
 
 ## Run
 
-Two terminals from the project root:
+```powershell
+.\make.ps1 run
+```
+
+That's it. The script builds the frontend bundle on first run (one-time cost
+of ~30s), starts FastAPI on `:8000` serving both the API and the built UI, and
+opens <http://localhost:8000> in your browser. `Ctrl-C` stops the server.
+
+First-time use: open **Settings**, point it at your SD card root (e.g. `D:\`)
+using the native folder picker, and confirm the status reads `ok`. Optionally
+paste a SteamGridDB API key if you want it as a secondary box-art source.
+
+### Dev mode (editing the UI)
+
+When you're actively changing the Angular code and want hot reload, run the
+backend and the Angular dev server in two terminals:
 
 ```powershell
 # terminal 1 — FastAPI backend on :8000
 .\make.ps1 backend
 
-# terminal 2 — Angular dev server on :4200 (proxies /api → :8000)
+# terminal 2 — Angular dev server on :4200 (proxies /api → :8000, hot reload)
 .\make.ps1 frontend
 ```
 
-Then open <http://localhost:4200>. Backend OpenAPI docs at
+Then open <http://localhost:4200>. Backend OpenAPI docs are always at
 <http://localhost:8000/docs>.
 
-First-time use: open **Settings**, point it at your SD card root (e.g. `D:\`)
-using the native folder picker, and confirm the status reads `ok`. Optionally
-paste a SteamGridDB API key if you want it as a secondary box-art source.
+### Rebuilding the bundle
+
+`run` only builds the frontend the first time. After pulling UI changes from
+git, rebuild explicitly:
+
+```powershell
+.\make.ps1 build
+```
 
 ## Test
 

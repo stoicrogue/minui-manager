@@ -1,8 +1,8 @@
 # PowerShell task runner. Usage: .\make.ps1 <target>
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("install", "dev", "backend", "frontend", "test", "fmt", "lint", "build")]
-    [string]$Target = "dev"
+    [ValidateSet("install", "run", "dev", "backend", "frontend", "test", "fmt", "lint", "build")]
+    [string]$Target = "run"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,6 +36,24 @@ switch ($Target) {
         Use-Node
         Push-Location frontend
         try { npm install } finally { Pop-Location }
+    }
+    "run" {
+        # One-command launch: build the frontend if needed, then serve it from
+        # FastAPI on :8000. Use `dev` instead when actively editing the UI.
+        Use-Venv
+        $distIndex = "frontend\dist\minui-manager-ui\browser\index.html"
+        if (-not (Test-Path $distIndex)) {
+            Write-Host "No frontend build found — building (this is a one-time cost)..."
+            Use-Node
+            Push-Location frontend
+            try { ng build } finally { Pop-Location }
+        }
+        Write-Host "MinUI Manager on http://localhost:8000  (Ctrl-C to stop)"
+        Start-Job -ScriptBlock {
+            Start-Sleep -Seconds 2
+            Start-Process "http://localhost:8000"
+        } | Out-Null
+        uvicorn app.main:app --app-dir backend --port 8000
     }
     "dev" {
         # Backend in foreground; user runs `.\make.ps1 frontend` in a second
