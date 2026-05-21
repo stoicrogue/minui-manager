@@ -1,14 +1,24 @@
-"""Library router — upload (two-step), list, delete."""
+"""Library router — upload (two-step), list, delete, backup export/import."""
 
 from __future__ import annotations
 
 import asyncio
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from app.db import session_scope
+from app.services.library_backup import (
+    LibraryImportError,
+    export_library,
+    import_library,
+)
 from app.services.library_store import (
     LibraryError,
     cancel_draft,
@@ -135,3 +145,78 @@ def delete_library_endpoint(library_id: int) -> dict[str, bool]:
     if not ok:
         raise HTTPException(status_code=404, detail="Library entry not found.")
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Backup export / import (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+def _cleanup_temp(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+@router.get("/export")
+async def export_library_endpoint() -> FileResponse:
+    """Stream a zip of the library + cached box art for backup.
+
+    Writes to a temp file (multi-GB libraries would OOM the laptop if
+    held in BytesIO) and registers a BackgroundTask to delete it after
+    the response is sent.
+    """
+    tmp = Path(tempfile.NamedTemporaryFile(prefix="minui-library-", suffix=".zip", delete=False).name)
+
+    def _do() -> None:
+        with session_scope() as session:
+            export_library(session, tmp)
+
+    try:
+        await asyncio.to_thread(_do)
+    except Exception:
+        _cleanup_temp(tmp)
+        raise
+
+    filename = f"minui-library-{datetime.now(timezone.utc).strftime('%Y-%m-%dT%H-%M-%S')}.zip"
+    return FileResponse(
+        tmp,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(_cleanup_temp, tmp),
+    )
+
+
+@router.post("/import")
+async def import_library_endpoint(file: Annotated[UploadFile, File()]) -> JSONResponse:
+    """Restore from a previously exported library zip.
+
+    Per-entry problems (collisions, unknown system codes, zip-slip)
+    are recorded as ``skipped`` rather than aborting the import. The
+    response shape lets the frontend show a per-entry summary.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename on the upload.")
+
+    # Stream the upload to a temp file rather than read() into memory.
+    tmp = Path(tempfile.NamedTemporaryFile(prefix="minui-import-", suffix=".zip", delete=False).name)
+    try:
+        with tmp.open("wb") as out:
+            while chunk := await file.read(1024 * 1024):
+                out.write(chunk)
+
+        def _do():
+            with session_scope() as session:
+                return import_library(session, tmp)
+
+        try:
+            result = await asyncio.to_thread(_do)
+        except LibraryImportError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"code": exc.code, "detail": exc.message},
+            )
+        return JSONResponse(status_code=200, content=result.to_dict())
+    finally:
+        _cleanup_temp(tmp)

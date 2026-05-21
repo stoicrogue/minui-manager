@@ -20,6 +20,7 @@ import {
   SDCardStatusResponse,
   SettingsService,
 } from '../../services/settings.service';
+import { ImportResult, LibraryService } from '../../services/library.service';
 
 @Component({
   selector: 'app-settings-page',
@@ -44,6 +45,7 @@ import {
 })
 export class SettingsComponent implements OnInit {
   private readonly api = inject(SettingsService);
+  private readonly library = inject(LibraryService);
   private readonly snack = inject(MatSnackBar);
 
   readonly settings = signal<AppSettings | null>(null);
@@ -56,6 +58,10 @@ export class SettingsComponent implements OnInit {
   readonly loading = signal<boolean>(false);
   readonly saving = signal<boolean>(false);
   readonly picking = signal<boolean>(false);
+  readonly exporting = signal<boolean>(false);
+  readonly importing = signal<boolean>(false);
+  readonly lastImport = signal<ImportResult | null>(null);
+  readonly importError = signal<string | null>(null);
 
   readonly resizeStrategies: { value: BoxartResizeStrategy; label: string; help: string }[] = [
     { value: 'cover', label: 'Cover (crop)', help: 'Fill the 200x300 slot; crop the overflow. Best for vertical box art.' },
@@ -179,6 +185,58 @@ export class SettingsComponent implements OnInit {
 
   toggleSgdbKeyVisible(): void {
     this.sgdbKeyVisible.update((v) => !v);
+  }
+
+  exportLibrary(): void {
+    this.exporting.set(true);
+    this.library.exportBackup().subscribe({
+      next: (response) => {
+        this.exporting.set(false);
+        const blob = response.body;
+        if (!blob) return;
+        // Pull the filename from Content-Disposition if present, otherwise default.
+        const cd = response.headers.get('Content-Disposition') ?? '';
+        const match = cd.match(/filename="?([^"]+)"?/i);
+        const filename = match?.[1] ?? `minui-library-${Date.now()}.zip`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.snack.open('Library backup downloaded.', undefined, { duration: 2500 });
+      },
+      error: (err) => {
+        this.exporting.set(false);
+        this.snack.open(`Export failed: ${err.message}`, 'Dismiss', { duration: 5000 });
+      },
+    });
+  }
+
+  onImportFileChosen(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    this.importing.set(true);
+    this.importError.set(null);
+    this.lastImport.set(null);
+    this.library.importBackup(file).subscribe({
+      next: (result) => {
+        this.importing.set(false);
+        this.lastImport.set(result);
+        const msg = result.skipped === 0
+          ? `Restored ${result.restored} game${result.restored === 1 ? '' : 's'}.`
+          : `Restored ${result.restored}, skipped ${result.skipped}. See details below.`;
+        this.snack.open(msg, undefined, { duration: 3500 });
+      },
+      error: (err) => {
+        this.importing.set(false);
+        const detail = err.error?.detail ?? err.message ?? 'Import failed.';
+        this.importError.set(detail);
+        this.snack.open(`Import failed: ${detail}`, 'Dismiss', { duration: 5000 });
+      },
+    });
   }
 
   saveResizeStrategy(): void {

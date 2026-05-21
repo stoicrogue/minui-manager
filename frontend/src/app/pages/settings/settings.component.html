@@ -209,4 +209,84 @@
       </div>
     </mat-card-content>
   </mat-card>
+
+  <mat-card appearance="outlined" class="card">
+    <mat-card-header>
+      <mat-card-title>Library backup</mat-card-title>
+      <mat-card-subtitle>
+        Export your ROMs and cached box art to a single zip you can stash
+        elsewhere. Restore by uploading the same zip on another machine
+        (or after a reinstall). Archive history, settings, and the SGDB
+        cache aren't included — just the library itself.
+      </mat-card-subtitle>
+    </mat-card-header>
+
+    <mat-card-content>
+      <div class="actions">
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="exportLibrary()"
+          [disabled]="exporting() || importing()"
+        >
+          @if (exporting()) {
+            <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+          } @else {
+            <mat-icon>file_download</mat-icon>
+          }
+          Export library
+        </button>
+        <button
+          mat-stroked-button
+          (click)="importInput.click()"
+          [disabled]="exporting() || importing()"
+        >
+          @if (importing()) {
+            <mat-progress-spinner mode="indeterminate" diameter="18"></mat-progress-spinner>
+          } @else {
+            <mat-icon>file_upload</mat-icon>
+          }
+          Restore from backup…
+        </button>
+        <input
+          #importInput
+          type="file"
+          accept=".zip,application/zip"
+          (change)="onImportFileChosen($event)"
+          style="display: none"
+        />
+      </div>
+
+      @if (importError(); as err) {
+        <p class="import-error">
+          <mat-icon>error_outline</mat-icon>
+          {{ err }}
+        </p>
+      }
+
+      @if (lastImport(); as r) {
+        <div class="import-result">
+          <p class="summary">
+            <mat-icon>{{ r.skipped === 0 ? 'check_circle' : 'info' }}</mat-icon>
+            Restored <strong>{{ r.restored }}</strong>, skipped
+            <strong>{{ r.skipped }}</strong>.
+          </p>
+          @if (r.skipped > 0) {
+            <details>
+              <summary>Skipped entries ({{ r.skipped }})</summary>
+              <ul>
+                @for (e of r.entries; track e.rom_filename) {
+                  @if (e.status === 'skipped') {
+                    <li>
+                      <code>{{ e.system_code }}/{{ e.rom_filename }}</code> — {{ e.reason }}
+                    </li>
+                  }
+                }
+              </ul>
+            </details>
+          }
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
 </div>

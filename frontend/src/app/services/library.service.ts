@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export type DetectionConfidence = 'high' | 'medium' | 'low' | 'unknown';
@@ -76,4 +76,33 @@ export class LibraryService {
   remove(libraryId: number): Observable<{ deleted: boolean }> {
     return this.http.delete<{ deleted: boolean }>(`/api/library/${libraryId}`);
   }
+
+  /** Download the backup zip. Returns the raw Blob so the caller can
+   * trigger a save dialog via an anchor element. */
+  exportBackup(): Observable<HttpResponse<Blob>> {
+    return this.http.get('/api/library/export', {
+      responseType: 'blob',
+      observe: 'response',
+    });
+  }
+
+  importBackup(file: File): Observable<ImportResult> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<ImportResult>('/api/library/import', form);
+  }
+}
+
+export interface ImportResultEntry {
+  system_code: string;
+  rom_filename: string;
+  display_name: string;
+  status: 'restored' | 'skipped';
+  reason: string | null;
+}
+
+export interface ImportResult {
+  restored: number;
+  skipped: number;
+  entries: ImportResultEntry[];
 }
