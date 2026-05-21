@@ -26,6 +26,8 @@ from sqlalchemy.orm import Session
 
 from app.models import LibraryGame
 from app.paths import LIBRARY_DIR
+from app.services.sdcard_reader import SDCardGame, scan_games
+from app.services.system_registry import SystemRegistry
 
 PENDING_DIR_NAME = "_pending"
 
@@ -242,6 +244,168 @@ def list_library(session: Session, system_code: str | None = None) -> list[Libra
 
 def get_library_game(session: Session, id_: int) -> LibraryGame | None:
     return session.get(LibraryGame, id_)
+
+
+# ---------------------------------------------------------------------------
+# Import: copy a game from the SD card into the library
+# ---------------------------------------------------------------------------
+
+
+def _find_card_game(sd_root: Path, registry: SystemRegistry, game_folder_name: str) -> SDCardGame | None:
+    """Return the named card game, or None if it isn't on the card.
+
+    The scanner has already done the (CODE) parsing and malformed checks,
+    so we just look up by folder name.
+    """
+    if "/" in game_folder_name or "\\" in game_folder_name or game_folder_name in {".", ".."}:
+        return None
+    for game in scan_games(sd_root, registry):
+        if game.game_folder_name == game_folder_name:
+            return game
+    return None
+
+
+def import_from_sd_card(
+    session: Session,
+    sd_root: Path,
+    registry: SystemRegistry,
+    game_folder_name: str,
+) -> LibraryGame:
+    """Copy a game from the SD card into the library.
+
+    Pulls the ROM + box art (if present) into ``./data/library/<CODE>/`` and
+    creates a ``LibraryGame`` row. Does not touch the card. Saves are
+    intentionally not pulled — those stay bound to the device lifecycle.
+
+    Raises :class:`LibraryError` on:
+      - card game missing
+      - card game malformed (no .m3u, missing ROM file)
+      - rom_filename or display_name collides with an existing library entry
+    """
+    card_game = _find_card_game(sd_root, registry, game_folder_name)
+    if card_game is None:
+        raise LibraryError(
+            "not_on_card",
+            f"No game folder named '{game_folder_name}' on the SD card.",
+        )
+    if card_game.is_malformed or not card_game.has_rom_file or not card_game.rom_filename:
+        raise LibraryError(
+            "malformed",
+            (
+                f"'{game_folder_name}' is malformed and can't be imported: "
+                f"{card_game.malformed_reason or 'ROM file missing'}."
+            ),
+        )
+
+    # Collision checks mirror confirm_draft so the two paths behave the same.
+    existing_filename = session.scalar(
+        select(LibraryGame).where(
+            LibraryGame.system_code == card_game.system_code,
+            LibraryGame.rom_filename == card_game.rom_filename,
+        )
+    )
+    if existing_filename is not None:
+        raise LibraryError(
+            "duplicate_rom",
+            (
+                f"A ROM named '{card_game.rom_filename}' is already in the "
+                f"{card_game.system_code} library."
+            ),
+        )
+    existing_display = session.scalar(
+        select(LibraryGame).where(
+            LibraryGame.system_code == card_game.system_code,
+            LibraryGame.display_name == card_game.display_name,
+        )
+    )
+    if existing_display is not None:
+        raise LibraryError(
+            "duplicate_display_name",
+            (
+                f"A {card_game.system_code} game is already named "
+                f"'{card_game.display_name}'. Rename the existing library "
+                "entry or delete it before importing again."
+            ),
+        )
+
+    # Copy ROM: Roms/<folder>/<rom>  →  data/library/<CODE>/<rom>
+    src_rom = Path(card_game.rom_path) if card_game.rom_path else None
+    if src_rom is None or not src_rom.is_file():
+        # Defensive — the malformed check above should have caught this.
+        raise LibraryError("malformed", f"Source ROM for '{game_folder_name}' is unreadable.")
+    dest_dir = _system_root(card_game.system_code)
+    dest_rom = dest_dir / card_game.rom_filename
+    if dest_rom.exists():
+        raise LibraryError(
+            "duplicate_rom",
+            f"A file named '{card_game.rom_filename}' already exists in {card_game.system_code}/.",
+        )
+    shutil.copy2(str(src_rom), str(dest_rom))
+
+    # Copy box art if it's present on the card. Failure is non-fatal —
+    # the user can pick art later via the boxart router.
+    dest_art: Path | None = None
+    if card_game.has_boxart and card_game.boxart_path:
+        src_art = Path(card_game.boxart_path)
+        if src_art.is_file():
+            art_dir = dest_dir / ".res"
+            art_dir.mkdir(parents=True, exist_ok=True)
+            dest_art = art_dir / f"{card_game.game_folder_name}.png"
+            try:
+                shutil.copy2(str(src_art), str(dest_art))
+            except OSError:
+                # Don't fail the whole import on a missing/locked art file.
+                dest_art = None
+
+    row = LibraryGame(
+        system_code=card_game.system_code,
+        rom_filename=card_game.rom_filename,
+        display_name=card_game.display_name,
+        size_bytes=dest_rom.stat().st_size,
+    )
+    session.add(row)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        # Roll back the filesystem copies so a failed insert doesn't leave
+        # orphan files in the library.
+        try:
+            dest_rom.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if dest_art is not None:
+            try:
+                dest_art.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise LibraryError(
+            "integrity_error", f"Database rejected the insert: {exc.orig}"
+        ) from exc
+    return row
+
+
+def populate_library_matches(session: Session, games: list[SDCardGame]) -> None:
+    """Fill in ``matches_library_id`` for each card game in place.
+
+    A card game matches a library entry when both ``system_code`` and
+    ``rom_filename`` are equal — that's the same key the unique constraint
+    enforces, so at most one library entry can match.
+    """
+    if not games:
+        return
+    rows = session.execute(
+        select(LibraryGame.id, LibraryGame.system_code, LibraryGame.rom_filename)
+    ).all()
+    index = {(r.system_code, r.rom_filename): r.id for r in rows}
+    for g in games:
+        if g.rom_filename is None:
+            continue
+        g.matches_library_id = index.get((g.system_code, g.rom_filename))
+
+
+# ---------------------------------------------------------------------------
+# Delete
+# ---------------------------------------------------------------------------
 
 
 def delete_library_game(session: Session, id_: int) -> bool:

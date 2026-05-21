@@ -26,6 +26,11 @@ from app.config import load_settings
 from app.db import session_scope
 from app.services.archive_store import ArchiveError, archive_game
 from app.services.folder_picker import open_folder_dialog
+from app.services.library_store import (
+    LibraryError,
+    import_from_sd_card,
+    populate_library_matches,
+)
 from app.services.sdcard_reader import (
     SDCardListing,
     listing,
@@ -91,11 +96,19 @@ async def pick_folder() -> dict[str, str | None]:
 
 @router.get("/games", response_model=SDCardListing)
 def get_games() -> SDCardListing:
-    """List games currently on the SD card, with slot count + summary."""
+    """List games currently on the SD card, with slot count + summary.
+
+    Each game's ``matches_library_id`` is filled in when there's a library
+    entry with the same (system_code, rom_filename), so the UI can disable
+    the "Import to library" action for games that are already imported.
+    """
     sd_root = _require_ok_sd_path()
     settings = load_settings()
     registry = load_systems()
-    return listing(sd_root, registry, slot_cap=settings.max_games_total)
+    result = listing(sd_root, registry, slot_cap=settings.max_games_total)
+    with session_scope() as session:
+        populate_library_matches(session, result.games)
+    return result
 
 
 @router.get("/orphan-art")
@@ -201,6 +214,39 @@ async def remove_game(game_folder_name: str) -> JSONResponse:
             content={"code": exc.code, "detail": exc.message},
         )
     return JSONResponse(status_code=200, content={"archived": archived})
+
+
+@router.post("/games/{game_folder_name}/import-to-library")
+async def import_game_to_library(game_folder_name: str) -> JSONResponse:
+    """Copy the named card game into the laptop library.
+
+    Pulls the ROM + box art (if present) into ``./data/library/<CODE>/`` and
+    creates a ``LibraryGame`` row. Leaves the card untouched. Saves are not
+    pulled. Returns the new library row.
+    """
+    sd_root = _require_ok_sd_path()
+    registry = load_systems()
+
+    def _do() -> dict[str, object]:
+        with session_scope() as session:
+            row = import_from_sd_card(session, sd_root, registry, game_folder_name)
+            return row.to_public_dict()
+
+    try:
+        imported = await asyncio.to_thread(_do)
+    except LibraryError as exc:
+        status_map = {
+            "not_on_card": 404,
+            "malformed": 422,
+            "duplicate_rom": 409,
+            "duplicate_display_name": 409,
+            "integrity_error": 409,
+        }
+        return JSONResponse(
+            status_code=status_map.get(exc.code, 400),
+            content={"code": exc.code, "detail": exc.message},
+        )
+    return JSONResponse(status_code=200, content={"imported": imported})
 
 
 @router.get("/box-art")

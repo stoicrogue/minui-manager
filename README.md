@@ -22,6 +22,10 @@ previous game is one click and saves come along for the ride.
 - **Library** — uploaded ROMs not currently on the card, with auto-detected
   system (parenthesized code → extension → preferred extension fallback) and
   an editable display name.
+- **Import from card** — pulls a game that's already on the SD card back into
+  the library in one click (ROM + box art). Lets you backfill the library from
+  a card you assembled by hand. Games already represented in the library show
+  as "Already in library" instead of offering the action.
 - **Box art lookup** — primary source is
   [libretro-thumbnails](https://github.com/libretro-thumbnails); fuzzy-matches
   the ROM filename and ranks the top candidates. Optional SteamGridDB as a

@@ -134,6 +134,27 @@ export class SDCardService {
       `/api/sdcard/games/${encodeURIComponent(gameFolderName)}`,
     );
   }
+
+  /** Copy a game from the SD card into the laptop library. */
+  importToLibrary(gameFolderName: string): Observable<{ imported: ImportedLibraryGame }> {
+    return this.http.post<{ imported: ImportedLibraryGame }>(
+      `/api/sdcard/games/${encodeURIComponent(gameFolderName)}/import-to-library`,
+      {},
+    );
+  }
+}
+
+export interface ImportedLibraryGame {
+  id: number;
+  system_code: string;
+  rom_filename: string;
+  display_name: string;
+  game_folder_name: string;
+  size_bytes: number;
+  added_at: string;
+  library_path: string;
+  has_boxart: boolean;
+  boxart_path: string | null;
 }
 
 export interface ArchivedGame {

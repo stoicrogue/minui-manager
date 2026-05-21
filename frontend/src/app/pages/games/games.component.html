@@ -119,6 +119,28 @@
                   </mat-chip>
                 }
                 <span class="actions-spacer"></span>
+                @if (game.matches_library_id != null) {
+                  <button
+                    mat-icon-button
+                    disabled
+                    matTooltip="Already in library"
+                  >
+                    <mat-icon>library_add_check</mat-icon>
+                  </button>
+                } @else {
+                  <button
+                    mat-icon-button
+                    (click)="openImportToLibrary(game)"
+                    [disabled]="game.is_malformed || importing() === game.game_folder_name"
+                    [matTooltip]="
+                      game.is_malformed
+                        ? 'Malformed games can\'t be imported'
+                        : 'Copy ROM and box art into the library'
+                    "
+                  >
+                    <mat-icon>library_add</mat-icon>
+                  </button>
+                }
                 <button
                   mat-icon-button
                   (click)="openRemove(game)"

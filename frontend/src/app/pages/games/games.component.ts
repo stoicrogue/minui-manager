@@ -47,6 +47,8 @@ export class GamesComponent implements OnInit {
   readonly loading = signal<boolean>(false);
   readonly notReady = signal<NotReadyDetail | null>(null);
   readonly genericError = signal<string | null>(null);
+  /** game_folder_name currently being imported, or null. Disables its button. */
+  readonly importing = signal<string | null>(null);
 
   readonly slotCountLabel = computed(() => {
     const l = this.listing();
@@ -92,6 +94,29 @@ export class GamesComponent implements OnInit {
 
   trackByFolder(_index: number, game: SDCardGame): string {
     return game.game_folder_name;
+  }
+
+  openImportToLibrary(game: SDCardGame): void {
+    if (this.importing()) return;
+    this.importing.set(game.game_folder_name);
+    this.api.importToLibrary(game.game_folder_name).subscribe({
+      next: () => {
+        this.importing.set(null);
+        this.snack.open(
+          `Imported ${game.display_name} to the library.`,
+          undefined,
+          { duration: 4000 },
+        );
+        this.refresh(); // refresh so matches_library_id flips and the button greys out
+      },
+      error: (err: HttpErrorResponse) => {
+        this.importing.set(null);
+        const detail = err.error?.detail ?? err.message ?? 'Import failed.';
+        this.snack.open(`Couldn't import ${game.display_name}: ${detail}`, 'Dismiss', {
+          duration: 6000,
+        });
+      },
+    });
   }
 
   openRemove(game: SDCardGame): void {
