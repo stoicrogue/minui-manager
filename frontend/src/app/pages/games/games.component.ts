@@ -49,6 +49,9 @@ export class GamesComponent implements OnInit {
   readonly genericError = signal<string | null>(null);
   /** game_folder_name currently being imported, or null. Disables its button. */
   readonly importing = signal<string | null>(null);
+  /** Bumped on every refresh so box-art <img src> URLs get a fresh
+   * query string — otherwise re-syncs serve the previously cached PNG. */
+  readonly listingTick = signal<number>(Date.now());
 
   readonly slotCountLabel = computed(() => {
     const l = this.listing();
@@ -75,6 +78,7 @@ export class GamesComponent implements OnInit {
     this.api.getGames().subscribe({
       next: (l) => {
         this.listing.set(l);
+        this.listingTick.set(Date.now());
         this.loading.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -89,7 +93,7 @@ export class GamesComponent implements OnInit {
   }
 
   boxArt(game: SDCardGame): string {
-    return this.api.boxArtUrl(game.game_folder_name);
+    return this.api.boxArtUrl(game.game_folder_name, this.listingTick());
   }
 
   trackByFolder(_index: number, game: SDCardGame): string {

@@ -115,9 +115,12 @@ export class SDCardService {
     return this.http.get<{ art: OrphanArt[] }>('/api/sdcard/orphan-art');
   }
 
-  /** Build a URL the browser can put in an <img src>. */
-  boxArtUrl(gameFolderName: string): string {
-    return `/api/sdcard/box-art?name=${encodeURIComponent(gameFolderName)}`;
+  /** Build a URL the browser can put in an <img src>. The optional
+   * version is appended as a cache-buster so re-syncs (which write new
+   * bytes to the same URL) don't render the previously cached image. */
+  boxArtUrl(gameFolderName: string, version?: string | number): string {
+    const v = version ?? Date.now();
+    return `/api/sdcard/box-art?name=${encodeURIComponent(gameFolderName)}&v=${v}`;
   }
 
   /** Plan (or execute) a sync of the given library entries. */
