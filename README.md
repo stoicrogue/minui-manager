@@ -10,9 +10,7 @@ The SD card is treated as a destination, not as storage — the durable library
 and the archive of removed games live on the laptop, so swapping back to a
 previous game is one click and saves come along for the ride.
 
-> Single-user, runs locally, opinionated for a Windows host. See
-> [`minui-game-manager-plan.md`](./minui-game-manager-plan.md) for the full
-> design doc.
+> Single-user, runs locally, opinionated for a Windows host.
 
 ## Features
 
@@ -155,8 +153,7 @@ git, rebuild explicitly:
 
 ## SD card layout (target)
 
-The full filesystem contract is in
-[`minui-game-manager-plan.md`](./minui-game-manager-plan.md) §4. Short version:
+The filesystem contract the writer enforces:
 
 ```
 <SD_ROOT>/
@@ -205,8 +202,7 @@ minui-manager/
 ├── data/                         user settings, library, archive (gitignored)
 ├── make.ps1                      PowerShell task runner
 ├── Makefile                      POSIX equivalent
-├── pyproject.toml
-└── minui-game-manager-plan.md    full design doc
+└── pyproject.toml
 ```
 
 `./data/` holds everything user-specific — uploaded ROMs, cached box art,
@@ -214,11 +210,10 @@ archived games, `config.json`, `app.db`, and `sync.log`. It is gitignored.
 
 ## Status
 
-Phases 1–8 of the [project plan](./minui-game-manager-plan.md) are complete:
-SD card validation, library upload (single- or multi-disk), system
+Feature-complete and manually verified end-to-end against a real Miyoo Mini
+Plus: SD card validation, library upload (single- or multi-disk), system
 auto-detection, libretro and SteamGridDB box-art lookup, image normalization,
 send-to-device, remove with archive + restore, and library backup/restore.
-Manually verified end-to-end against a real Miyoo Mini Plus.
 
 ## Caveats
 
