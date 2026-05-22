@@ -44,7 +44,10 @@ from app.services.system_registry import load_systems
 logger = logging.getLogger(__name__)
 
 MANIFEST_NAME = "library-manifest.json"
-MANIFEST_VERSION = 1
+# v1: single ROM per entry, flat <CODE>/<rom> layout.
+# v2: per-game folder layout, ``disc_filenames`` for multi-disk games.
+MANIFEST_VERSION = 2
+SUPPORTED_MANIFEST_VERSIONS = (1, 2)
 SHARED_RES_DIR = ".res"
 
 
@@ -59,17 +62,32 @@ class ManifestEntry(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=512)
     size_bytes: int = Field(..., ge=0)
     added_at: datetime
-    rom_path: str  # relative path inside the zip
+    rom_path: str  # relative path of the primary disc inside the zip
     boxart_path: str | None = None
     boxart_size_bytes: int | None = None
+    # v2 fields — absent in v1 backups (loader fills sensibly).
+    disc_filenames: list[str] = Field(default_factory=list)
+    disc_paths: list[str] = Field(default_factory=list)
 
     @property
     def game_folder_name(self) -> str:
         return f"{self.display_name} ({self.system_code})"
 
+    @property
+    def effective_discs(self) -> list[tuple[str, str]]:
+        """Return ``[(filename, zip_path), ...]`` in playback order.
+
+        v2 entries always carry ``disc_filenames``/``disc_paths``. v1
+        entries (legacy) are treated as single-disk where the only disc
+        lives at ``rom_path`` with the name ``rom_filename``.
+        """
+        if self.disc_filenames and self.disc_paths and len(self.disc_filenames) == len(self.disc_paths):
+            return list(zip(self.disc_filenames, self.disc_paths))
+        return [(self.rom_filename, self.rom_path)]
+
 
 class LibraryManifest(BaseModel):
-    version: Literal[1] = MANIFEST_VERSION
+    version: Literal[1, 2] = MANIFEST_VERSION
     exported_at: datetime
     games: list[ManifestEntry]
 
@@ -91,8 +109,8 @@ def _library_root() -> Path:
     return _paths.LIBRARY_DIR
 
 
-def _rom_zip_path(code: str, rom_filename: str) -> str:
-    return f"{code}/{rom_filename}"
+def _disc_zip_path(code: str, game_folder_name: str, disc_filename: str) -> str:
+    return f"{code}/{game_folder_name}/{disc_filename}"
 
 
 def _boxart_zip_path(code: str, game_folder_name: str) -> str:
@@ -104,7 +122,8 @@ def export_library(session: Session, dest_path: Path) -> ExportResult:
 
     Walks the DB (not the filesystem) so library rows whose files have
     been deleted out from under us get flagged in ``skipped`` rather
-    than silently included. ``_pending/`` is never included.
+    than silently included. Every disc of a multi-disk game is included
+    under ``<CODE>/<game-folder>/<disc>``. ``_pending/`` is never bundled.
     """
     rows = session.scalars(
         select(LibraryGame).order_by(LibraryGame.system_code, LibraryGame.rom_filename)
@@ -115,20 +134,26 @@ def export_library(session: Session, dest_path: Path) -> ExportResult:
 
     with zipfile.ZipFile(dest_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for row in rows:
-            rom = row.library_path
-            if not rom.is_file():
+            discs = row.disc_filenames_list
+            disc_paths = row.disc_paths
+            missing = [p for p in disc_paths if not p.is_file()]
+            if missing:
                 result.skipped.append(
                     {
                         "system_code": row.system_code,
                         "rom_filename": row.rom_filename,
-                        "reason": f"ROM file missing on disk at {rom}",
+                        "reason": f"Disc file(s) missing on disk: {', '.join(str(p) for p in missing)}",
                     }
                 )
                 continue
-            rom_zip = _rom_zip_path(row.system_code, row.rom_filename)
-            zf.write(rom, arcname=rom_zip)
-            result.files_written += 1
-            result.bytes_written += rom.stat().st_size
+
+            zip_disc_paths: list[str] = []
+            for disc_name, disc_path in zip(discs, disc_paths):
+                arc = _disc_zip_path(row.system_code, row.game_folder_name, disc_name)
+                zf.write(disc_path, arcname=arc)
+                result.files_written += 1
+                result.bytes_written += disc_path.stat().st_size
+                zip_disc_paths.append(arc)
 
             boxart_zip: str | None = None
             boxart_size: int | None = None
@@ -147,9 +172,11 @@ def export_library(session: Session, dest_path: Path) -> ExportResult:
                     display_name=row.display_name,
                     size_bytes=row.size_bytes,
                     added_at=row.added_at,
-                    rom_path=rom_zip,
+                    rom_path=zip_disc_paths[0],
                     boxart_path=boxart_zip,
                     boxart_size_bytes=boxart_size,
+                    disc_filenames=discs,
+                    disc_paths=zip_disc_paths,
                 )
             )
 
@@ -237,11 +264,11 @@ def import_library(session: Session, src_path: Path) -> ImportResult:
             ) from exc
 
         version = manifest_dict.get("version")
-        if version != MANIFEST_VERSION:
+        if version not in SUPPORTED_MANIFEST_VERSIONS:
             raise LibraryImportError(
                 "version_mismatch",
                 f"Manifest version is {version!r}; this build understands "
-                f"version {MANIFEST_VERSION}.",
+                f"versions {SUPPORTED_MANIFEST_VERSIONS}.",
             )
 
         try:
@@ -274,7 +301,13 @@ def _import_one(
     registry,
     library_root: Path,
 ) -> ImportEntryResult:
-    """Restore one manifest entry. Per-entry failures return a skipped result."""
+    """Restore one manifest entry. Per-entry failures return a skipped result.
+
+    v1 manifests describe a single flat file at ``rom_path``; v2 manifests
+    describe one-or-more discs at ``disc_paths``. ``effective_discs`` on
+    the entry hides the difference. Either way, the on-disk destination
+    is always the per-game folder.
+    """
     base = ImportEntryResult(
         system_code=entry.system_code,
         rom_filename=entry.rom_filename,
@@ -311,33 +344,45 @@ def _import_one(
             "exists — delete it first to re-import.",
         )
 
-    # Path safety on the zip member names.
-    try:
-        rom_dest = _safe_extract_path(entry.rom_path, library_root)
-    except _UnsafeZipPath as exc:
-        return _skip(base, str(exc))
+    discs = entry.effective_discs  # [(filename, zip_path), ...]
+    game_folder = library_root / entry.system_code / entry.game_folder_name
+
+    # Resolve destinations and verify each member exists in the zip. The
+    # zip member name is also validated even though we never use it as a
+    # destination — a v1 manifest that points at ``../escape.bin`` is a
+    # signal of tampering, not a legitimate backup, and we reject it
+    # outright.
+    disc_dests: list[Path] = []
+    disc_bytes: list[bytes] = []
+    for disc_filename, zip_path in discs:
+        try:
+            _safe_extract_path(zip_path, library_root)
+        except _UnsafeZipPath as exc:
+            return _skip(base, str(exc))
+        try:
+            dest = _safe_extract_path(
+                f"{entry.system_code}/{entry.game_folder_name}/{disc_filename}",
+                library_root,
+            )
+        except _UnsafeZipPath as exc:
+            return _skip(base, str(exc))
+        try:
+            data = zf.read(zip_path)
+        except KeyError:
+            return _skip(base, f"Disc file {zip_path!r} not present in the zip.")
+        disc_dests.append(dest)
+        disc_bytes.append(data)
 
     art_dest: Path | None = None
+    art_bytes: bytes | None = None
     if entry.boxart_path is not None:
         try:
             art_dest = _safe_extract_path(entry.boxart_path, library_root)
         except _UnsafeZipPath as exc:
             return _skip(base, str(exc))
-
-    # Members must exist in the zip.
-    try:
-        rom_bytes = zf.read(entry.rom_path)
-    except KeyError:
-        return _skip(base, f"ROM file {entry.rom_path!r} not present in the zip.")
-
-    art_bytes: bytes | None = None
-    if entry.boxart_path is not None:
         try:
             art_bytes = zf.read(entry.boxart_path)
         except KeyError:
-            # Manifest references art that isn't actually in the zip. Restore
-            # the ROM but skip the art with a note via logger; the user can
-            # re-pick art via the normal flow.
             logger.warning(
                 "Zip manifest references missing boxart %s for %s — restoring ROM only.",
                 entry.boxart_path,
@@ -346,19 +391,30 @@ def _import_one(
             art_bytes = None
 
     # Write the files.
-    rom_dest.parent.mkdir(parents=True, exist_ok=True)
-    rom_dest.write_bytes(rom_bytes)
+    game_folder.mkdir(parents=True, exist_ok=True)
+    for dest, data in zip(disc_dests, disc_bytes):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+    # Canonical .m3u next to the discs (matches the on-card layout).
+    from app.services.library_store import _write_m3u
+    _write_m3u(game_folder, entry.game_folder_name, [d[0] for d in discs])
     if art_bytes is not None and art_dest is not None:
         art_dest.parent.mkdir(parents=True, exist_ok=True)
         art_dest.write_bytes(art_bytes)
 
     # Insert the row.
+    disc_names = [d[0] for d in discs]
+    total_size = sum(p.stat().st_size for p in disc_dests)
+    disc_filenames_json = (
+        json.dumps(disc_names) if len(disc_names) > 1 else None
+    )
     row = LibraryGame(
         system_code=entry.system_code,
         rom_filename=entry.rom_filename,
         display_name=entry.display_name,
-        size_bytes=rom_dest.stat().st_size,
+        size_bytes=total_size,
         added_at=entry.added_at,
+        disc_filenames=disc_filenames_json,
     )
     session.add(row)
     session.flush()

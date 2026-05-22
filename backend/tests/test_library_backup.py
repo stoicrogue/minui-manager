@@ -41,7 +41,7 @@ def _add_library_entry(
 ) -> dict:
     up = client.post(
         "/api/library/upload",
-        files={"file": (filename, rom_payload, "application/octet-stream")},
+        files={"files": (filename, rom_payload, "application/octet-stream")},
     ).json()
     confirmed = client.post(
         f"/api/library/drafts/{up['draft_id']}/confirm",
@@ -88,19 +88,20 @@ def test_export_returns_zip_with_manifest_and_files(tmp_project_root: Path) -> N
     with _open_export(r.content) as zf:
         names = sorted(zf.namelist())
         assert "library-manifest.json" in names
-        assert "GB/Tetris.gb" in names
+        assert "GB/Tetris (GB)/Tetris.gb" in names
         assert "GB/.res/Tetris (GB).png" in names
-        assert "GB/Mario.gb" in names
+        assert "GB/Mario (GB)/Mario.gb" in names
         # Mario has no art; no Mario.png expected.
         assert "GB/.res/Mario (GB).png" not in names
 
         manifest = json.loads(zf.read("library-manifest.json"))
-        assert manifest["version"] == 1
+        assert manifest["version"] == 2
         codes = [g["rom_filename"] for g in manifest["games"]]
         # Deterministic sort.
         assert codes == sorted(codes)
         tetris = next(g for g in manifest["games"] if g["rom_filename"] == "Tetris.gb")
         assert tetris["boxart_path"] == "GB/.res/Tetris (GB).png"
+        assert tetris["disc_filenames"] == ["Tetris.gb"]
         mario = next(g for g in manifest["games"] if g["rom_filename"] == "Mario.gb")
         assert mario["boxart_path"] is None
 
@@ -112,7 +113,7 @@ def test_export_excludes_pending_uploads(tmp_project_root: Path) -> None:
     # Simulate an in-flight upload by hitting /upload but NOT confirming.
     client.post(
         "/api/library/upload",
-        files={"file": ("Pending.gb", b"PENDING", "application/octet-stream")},
+        files={"files": ("Pending.gb", b"PENDING", "application/octet-stream")},
     )
 
     r = client.get("/api/library/export")
@@ -156,8 +157,9 @@ def test_export_flags_rows_whose_files_were_deleted(tmp_project_root: Path) -> N
 
     client = _client(tmp_project_root)
     g = _add_library_entry(client, "Tetris.gb", "GB", "Tetris", with_boxart=True)
-    # Delete the ROM file underneath us.
-    Path(g["library_path"]).unlink()
+    # Delete the ROM file underneath us. library_path is now the per-game folder.
+    import shutil
+    shutil.rmtree(Path(g["library_path"]))
 
     tmp_zip = _paths.DATA_DIR / "manual-export.zip"
     with session_scope() as session:
@@ -188,7 +190,7 @@ def test_roundtrip_export_then_import_recreates_library(tmp_project_root: Path) 
     client.delete(f"/api/library/{g1['id']}")
     client.delete(f"/api/library/{g2['id']}")
     assert client.get("/api/library").json()["total"] == 0
-    assert not (_paths.LIBRARY_DIR / "GB" / "Tetris.gb").exists()
+    assert not (_paths.LIBRARY_DIR / "GB" / "Tetris (GB)").exists()
 
     # Import.
     r = client.post(
@@ -205,9 +207,9 @@ def test_roundtrip_export_then_import_recreates_library(tmp_project_root: Path) 
     names = sorted(g["rom_filename"] for g in listing["games"])
     assert names == ["Mario.gb", "Tetris.gb"]
 
-    # Files are back, byte-identical.
-    assert (_paths.LIBRARY_DIR / "GB" / "Tetris.gb").read_bytes() == b"TET"
-    assert (_paths.LIBRARY_DIR / "GB" / "Mario.gb").read_bytes() == b"MAR"
+    # Files are back, byte-identical, under per-game folders.
+    assert (_paths.LIBRARY_DIR / "GB" / "Tetris (GB)" / "Tetris.gb").read_bytes() == b"TET"
+    assert (_paths.LIBRARY_DIR / "GB" / "Mario (GB)" / "Mario.gb").read_bytes() == b"MAR"
     assert (_paths.LIBRARY_DIR / "GB" / ".res" / "Tetris (GB).png").is_file()
 
 

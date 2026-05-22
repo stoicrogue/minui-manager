@@ -45,7 +45,7 @@ def _add_library_entry(
 ) -> dict:
     up = client.post(
         "/api/library/upload",
-        files={"file": (filename, b"\x00" * 32, "application/octet-stream")},
+        files={"files": (filename, b"\x00" * 32, "application/octet-stream")},
     ).json()
     confirmed = client.post(
         f"/api/library/drafts/{up['draft_id']}/confirm",
@@ -101,7 +101,7 @@ def test_plan_writes_rom_m3u_and_box_art(
     # m3u destination uses the game folder name (not the ROM name).
     m3u_op = next(o for o in game["ops"] if o["action"] == "write_text")
     assert m3u_op["dest_rel"] == "Roms/Tetris (GB)/Tetris (GB).m3u"
-    assert m3u_op["note"] == "Tetris.gb"  # m3u content == rom filename
+    assert m3u_op["note"] == "Tetris.gb\n"  # m3u content == disc filenames + newline
     # Box-art destination uses game folder name, not the ROM extension.
     art_copy = [
         o for o in game["ops"] if o["action"] == "copy" and "/.res/" in o["dest_rel"]
@@ -257,7 +257,7 @@ def test_real_sync_writes_rom_m3u_and_art_to_card(
     art = fake_sd_card / "Roms" / ".res" / "Tetris (GB).png"
 
     assert rom.is_file()
-    assert m3u.read_text(encoding="utf-8") == "Tetris.gb"
+    assert m3u.read_text(encoding="utf-8") == "Tetris.gb\n"
     assert art.is_file()
     # Art bytes are the on-disk library PNG.
     assert art.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
@@ -283,7 +283,7 @@ def test_real_sync_overwrites_existing_game_folder(
     # Old rom is gone, new rom is there, m3u points at the new file.
     assert not (folder / "stale.gb").exists()
     assert (folder / "Tetris.gb").is_file()
-    assert (folder / "Tetris (GB).m3u").read_text(encoding="utf-8") == "Tetris.gb"
+    assert (folder / "Tetris (GB).m3u").read_text(encoding="utf-8") == "Tetris.gb\n"
 
 
 def test_sync_returns_207_when_some_games_fail(
@@ -297,7 +297,9 @@ def test_sync_returns_207_when_some_games_fail(
     good = _add_library_entry(client, "Tetris.gb", "GB", "Tetris")
     bad = _add_library_entry(client, "Mario.gb", "GB", "Mario")
     # Delete the bad ROM from the library so the executor's copy fails.
-    Path(bad["library_path"]).unlink()
+    # library_path is now a folder; nuke the disc file inside.
+    import shutil
+    shutil.rmtree(Path(bad["library_path"]))
 
     r = client.post(
         "/api/sdcard/sync", json={"library_ids": [good["id"], bad["id"]]}

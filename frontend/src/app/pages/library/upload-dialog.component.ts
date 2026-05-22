@@ -23,6 +23,7 @@ import {
   SystemDetection,
   UploadResponse,
 } from '../../services/library.service';
+import { collectFilesFromDrop } from '../../services/drop-folder.util';
 
 type Step = 'pick' | 'uploading' | 'review' | 'confirming';
 
@@ -49,9 +50,10 @@ type Step = 'pick' | 'uploading' | 'review' | 'confirming';
 export class UploadDialogComponent {
   private readonly api = inject(LibraryService);
   private readonly dialogRef = inject(MatDialogRef<UploadDialogComponent>);
-  readonly data = inject<{ initialFile?: File } | null>(MAT_DIALOG_DATA, {
-    optional: true,
-  });
+  readonly data = inject<{ initialFile?: File; initialFiles?: File[] } | null>(
+    MAT_DIALOG_DATA,
+    { optional: true },
+  );
 
   readonly step = signal<Step>('pick');
   readonly upload = signal<UploadResponse | null>(null);
@@ -70,21 +72,22 @@ export class UploadDialogComponent {
   );
 
   constructor() {
-    // If parent passed a dropped file, kick off the upload immediately.
-    const f = this.data?.initialFile;
-    if (f) {
-      this.beginUpload(f);
+    // Parent may pass either a single file (legacy) or an explicit list
+    // (drag-and-drop on the library page with a multi-disk folder).
+    const initial = this.data?.initialFiles ?? (this.data?.initialFile ? [this.data.initialFile] : null);
+    if (initial && initial.length > 0) {
+      this.beginUpload(initial);
     }
   }
 
   onFileChosen(event: Event): void {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = input.files ? Array.from(input.files) : [];
     // Clear the value so re-picking the same file fires change again
     // (browsers suppress duplicate change events otherwise).
     input.value = '';
-    if (file) {
-      this.beginUpload(file);
+    if (files.length > 0) {
+      this.beginUpload(files);
     }
   }
 
@@ -97,19 +100,30 @@ export class UploadDialogComponent {
     this.dragOver.set(false);
   }
 
-  onDrop(event: DragEvent): void {
+  async onDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     this.dragOver.set(false);
-    const file = event.dataTransfer?.files?.[0];
-    if (file) {
-      this.beginUpload(file);
+    const items = event.dataTransfer?.items;
+    let files: File[] = [];
+    if (items && items.length > 0 && (items[0] as any).webkitGetAsEntry) {
+      try {
+        files = await collectFilesFromDrop(items);
+      } catch {
+        // Fall back to the flat file list if folder traversal fails.
+        files = Array.from(event.dataTransfer?.files ?? []);
+      }
+    } else {
+      files = Array.from(event.dataTransfer?.files ?? []);
+    }
+    if (files.length > 0) {
+      this.beginUpload(files);
     }
   }
 
-  private beginUpload(file: File): void {
+  private beginUpload(files: File[]): void {
     this.step.set('uploading');
     this.errorMessage.set(null);
-    this.api.upload(file).subscribe({
+    this.api.upload(files).subscribe({
       next: (resp) => {
         this.upload.set(resp);
         this.systemCode.set(resp.detection.detected_code ?? '');

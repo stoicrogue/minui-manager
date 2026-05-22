@@ -27,6 +27,7 @@ nightmare scenario; this ordering eliminates it.
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 from datetime import datetime, timezone
@@ -132,6 +133,11 @@ def archive_game(
     # 4. Insert + commit BEFORE the destructive delete step. If the delete
     # fails afterward, we still have a valid archive entry; the worst case
     # is a duplicate game on the card that the user can re-remove.
+    disc_filenames_json = (
+        json.dumps(target.disc_filenames)
+        if len(target.disc_filenames) > 1
+        else None
+    )
     row = ArchivedGame(
         system_code=code,
         game_folder_name=game_folder_name,
@@ -141,6 +147,7 @@ def archive_game(
         has_save=has_save,
         has_boxart=has_boxart,
         archived_at=datetime.now(timezone.utc),
+        disc_filenames=disc_filenames_json,
     )
     session.add(row)
     session.commit()
@@ -241,7 +248,12 @@ def delete_archived(session: Session, archive_id: int) -> ArchivedGame:
 
 
 def restore_to_library(session: Session, archive_id: int) -> LibraryGame:
-    """Copy the archived ROM (+ art if present) into the library.
+    """Copy the archived game's discs (+ art if present) into the library.
+
+    Multi-disk-aware: every disc listed in the archive (either via the
+    persisted ``disc_filenames`` or recovered by reading the archived
+    .m3u) is copied into the per-game folder. Single-disk falls out of
+    the same code path with a one-element list.
 
     Idempotent: if a library entry with the same (system_code,
     display_name) or (system_code, rom_filename) already exists, the
@@ -256,23 +268,57 @@ def restore_to_library(session: Session, archive_id: int) -> LibraryGame:
     if archived is None:
         raise ArchiveError("not_found", f"No archived game with id {archive_id}.")
 
-    rom_src = archived.archived_rom_path
-    if not rom_src.is_file():
+    code = archived.system_code
+    display_name = archived.display_name
+    archived_folder = archived.archived_game_folder
+
+    if not archived_folder.is_dir():
         raise ArchiveError(
             "archive_missing",
-            f"ROM file is missing from the archive at {rom_src}. The archive "
+            f"Archived game folder is missing at {archived_folder}. The archive "
             "may have been moved or deleted outside the app.",
         )
 
-    code = archived.system_code
-    rom_filename = archived.rom_filename
-    display_name = archived.display_name
+    # Recover the disc list. Prefer what's stored on the row; if it's
+    # NULL (pre-multi-disk archive), peek at the on-disk .m3u to catch
+    # multi-disk games archived before this feature shipped.
+    disc_names = list(archived.disc_filenames_list)
+    if len(disc_names) <= 1:
+        m3u_path = archived_folder / f"{archived.game_folder_name}.m3u"
+        if m3u_path.is_file():
+            from app.services.library_store import _read_m3u_disc_list
+            recovered = _read_m3u_disc_list(m3u_path)
+            if len(recovered) > 1:
+                disc_names = recovered
 
-    # Re-copy ROM (overwrite if present).
+    if not disc_names:
+        disc_names = [archived.rom_filename]
+
+    # Every disc must exist in the archive folder.
+    disc_srcs: list[Path] = []
+    for disc in disc_names:
+        src = archived_folder / disc
+        if not src.is_file():
+            raise ArchiveError(
+                "archive_missing",
+                f"Disc '{disc}' missing from archive at {src}.",
+            )
+        disc_srcs.append(src)
+
+    # Re-copy every disc into the per-game library folder.
     library_system_dir = _paths.LIBRARY_DIR / code
     library_system_dir.mkdir(parents=True, exist_ok=True)
-    rom_dest = library_system_dir / rom_filename
-    shutil.copy2(rom_src, rom_dest)
+    game_dest_folder = library_system_dir / archived.game_folder_name
+    game_dest_folder.mkdir(parents=True, exist_ok=True)
+    dest_discs: list[Path] = []
+    for src, name in zip(disc_srcs, disc_names):
+        dest = game_dest_folder / name
+        shutil.copy2(src, dest)
+        dest_discs.append(dest)
+
+    # Write the canonical .m3u so the restored folder mirrors the on-card layout.
+    from app.services.library_store import _write_m3u
+    _write_m3u(game_dest_folder, archived.game_folder_name, disc_names)
 
     # Re-copy art if it's in the archive.
     art_src = archived.archived_boxart_path
@@ -283,6 +329,7 @@ def restore_to_library(session: Session, archive_id: int) -> LibraryGame:
         shutil.copy2(art_src, art_dest)
 
     # Look up existing library row by either unique key.
+    rom_filename = disc_names[0]
     existing = session.scalar(
         select(LibraryGame).where(
             LibraryGame.system_code == code,
@@ -300,11 +347,16 @@ def restore_to_library(session: Session, archive_id: int) -> LibraryGame:
     if existing is not None:
         return existing
 
+    total_size = sum(p.stat().st_size for p in dest_discs)
+    disc_filenames_json = (
+        json.dumps(disc_names) if len(disc_names) > 1 else None
+    )
     row = LibraryGame(
         system_code=code,
         rom_filename=rom_filename,
         display_name=display_name,
-        size_bytes=rom_dest.stat().st_size,
+        size_bytes=total_size,
+        disc_filenames=disc_filenames_json,
     )
     session.add(row)
     session.flush()

@@ -195,6 +195,15 @@
             <div class="rom-name" [title]="game.rom_filename">{{ game.rom_filename }}</div>
             <div class="info-row">
               <span class="size">{{ prettySize(game.size_bytes) }}</span>
+              @if (game.is_multi_disk) {
+                <span
+                  class="multi-disk-badge"
+                  [matTooltip]="game.disc_filenames.join('\n')"
+                >
+                  <mat-icon>album</mat-icon>
+                  {{ game.disc_count }} discs
+                </span>
+              }
             </div>
             <div class="badges">
               <mat-chip class="badge code">{{ game.system_code }}</mat-chip>

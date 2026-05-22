@@ -1,8 +1,15 @@
 """SQLAlchemy models. Phase 3 added LibraryGame; Phase 4 adds the
-libretro-thumbnails listing cache; Phase 7 adds ArchivedGame."""
+libretro-thumbnails listing cache; Phase 7 adds ArchivedGame.
+
+Multi-disk games: ``LibraryGame.disc_filenames`` is a JSON-encoded list
+of disc filenames when the game has more than one disc. NULL means
+single-disk (``rom_filename`` is the only file). The on-disk layout is
+always per-game: ``data/library/<CODE>/<game_folder_name>/<disc>``.
+"""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -55,10 +62,16 @@ class LibraryGame(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     system_code: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    # For multi-disk games, this is the first disc — kept so the existing
+    # uniqueness constraint still gives one row per logical game. The
+    # authoritative disc list is ``disc_filenames``.
     rom_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     display_name: Mapped[str] = mapped_column(String(512), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    # JSON-encoded list of disc filenames in playback order. NULL means
+    # single-disk (treat as ``[rom_filename]``).
+    disc_filenames: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
     @property
     def game_folder_name(self) -> str:
@@ -67,15 +80,44 @@ class LibraryGame(Base):
         return f"{self.display_name} ({self.system_code})"
 
     @property
-    def library_path(self) -> Path:
-        return _paths.LIBRARY_DIR / self.system_code / self.rom_filename
+    def disc_filenames_list(self) -> list[str]:
+        """Parsed disc list. Falls back to ``[rom_filename]`` for single-disk."""
+        if not self.disc_filenames:
+            return [self.rom_filename]
+        try:
+            data = json.loads(self.disc_filenames)
+        except (json.JSONDecodeError, TypeError):
+            return [self.rom_filename]
+        if not isinstance(data, list) or not data:
+            return [self.rom_filename]
+        return [str(x) for x in data]
+
+    @property
+    def is_multi_disk(self) -> bool:
+        return len(self.disc_filenames_list) > 1
+
+    @property
+    def library_folder(self) -> Path:
+        """The per-game folder that holds the ROM(s) on disk."""
+        return _paths.LIBRARY_DIR / self.system_code / self.game_folder_name
+
+    @property
+    def disc_paths(self) -> list[Path]:
+        """Absolute paths to each disc file in playback order."""
+        folder = self.library_folder
+        return [folder / disc for disc in self.disc_filenames_list]
+
+    @property
+    def m3u_content(self) -> str:
+        """The exact bytes to write into ``<folder>.m3u`` at sync time."""
+        return "\n".join(self.disc_filenames_list) + "\n"
 
     @property
     def boxart_path(self) -> Path:
-        # Phase 5 will populate this file; the path is determined now.
         return _paths.LIBRARY_DIR / self.system_code / ".res" / f"{self.game_folder_name}.png"
 
     def to_public_dict(self) -> dict[str, object]:
+        discs = self.disc_filenames_list
         return {
             "id": self.id,
             "system_code": self.system_code,
@@ -84,7 +126,10 @@ class LibraryGame(Base):
             "game_folder_name": self.game_folder_name,
             "size_bytes": self.size_bytes,
             "added_at": _iso_utc(self.added_at),
-            "library_path": str(self.library_path),
+            "library_path": str(self.library_folder),
+            "disc_filenames": discs,
+            "is_multi_disk": len(discs) > 1,
+            "disc_count": len(discs),
             "has_boxart": self.boxart_path.is_file(),
             "boxart_path": str(self.boxart_path) if self.boxart_path.is_file() else None,
         }
@@ -126,22 +171,47 @@ class ArchivedGame(Base):
     has_save: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     has_boxart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     archived_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    # JSON-encoded disc list, mirroring LibraryGame.disc_filenames. NULL =
+    # single-disk (fall back to [rom_filename]).
+    disc_filenames: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+
+    @property
+    def disc_filenames_list(self) -> list[str]:
+        if not self.disc_filenames:
+            return [self.rom_filename] if self.rom_filename else []
+        try:
+            data = json.loads(self.disc_filenames)
+        except (json.JSONDecodeError, TypeError):
+            return [self.rom_filename] if self.rom_filename else []
+        if not isinstance(data, list) or not data:
+            return [self.rom_filename] if self.rom_filename else []
+        return [str(x) for x in data]
 
     @property
     def archive_path(self) -> Path:
         return _paths.ARCHIVE_DIR / self.archive_relpath
 
     @property
+    def archived_game_folder(self) -> Path:
+        """The folder that holds the ROM(s) inside the archive directory."""
+        return self.archive_path / self.game_folder_name
+
+    @property
     def archived_rom_path(self) -> Path:
-        """ROM lives inside the archived game folder."""
-        return self.archive_path / self.game_folder_name / self.rom_filename
+        """First disc's archived path (single-disk: the rom)."""
+        return self.archived_game_folder / self.rom_filename
+
+    @property
+    def archived_disc_paths(self) -> list[Path]:
+        folder = self.archived_game_folder
+        return [folder / disc for disc in self.disc_filenames_list]
 
     @property
     def archived_boxart_path(self) -> Path:
-        """Box art sits at the top of the archive dir, named after the folder."""
         return self.archive_path / f"{self.game_folder_name}.png"
 
     def to_public_dict(self) -> dict[str, object]:
+        discs = self.disc_filenames_list
         return {
             "id": self.id,
             "system_code": self.system_code,
@@ -152,5 +222,7 @@ class ArchivedGame(Base):
             "archive_relpath": self.archive_relpath,
             "has_save": self.has_save,
             "has_boxart": self.has_boxart,
+            "disc_filenames": discs,
+            "is_multi_disk": len(discs) > 1,
             "archived_at": _iso_utc(self.archived_at),
         }

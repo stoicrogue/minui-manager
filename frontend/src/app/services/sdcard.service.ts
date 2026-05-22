@@ -18,6 +18,8 @@ export interface SDCardGame {
   is_malformed: boolean;
   malformed_reason: string | null;
   matches_library_id: number | null;
+  disc_filenames: string[];
+  is_multi_disk: boolean;
 }
 
 export interface SDCardListing {

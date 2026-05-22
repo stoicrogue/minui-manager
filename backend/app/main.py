@@ -18,10 +18,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.db import init_db
+from app.db import init_db, session_scope
 from app.paths import PROJECT_ROOT, ensure_data_dirs
 from app.routers import archive, boxart, library, sdcard, settings
-from app.services.library_store import cleanup_stale_drafts
+from app.services.library_store import (
+    cleanup_stale_drafts,
+    migrate_legacy_flat_layout,
+)
 
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist" / "minui-manager-ui" / "browser"
 
@@ -31,6 +34,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ensure_data_dirs()
     init_db()
     cleanup_stale_drafts()
+    with session_scope() as session:
+        migrate_legacy_flat_layout(session)
     yield
 
 

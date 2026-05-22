@@ -34,7 +34,7 @@ def _add_library_entry(client: TestClient, filename: str, code: str, display: st
     """Helper: upload + confirm a single library entry, return its id."""
     up = client.post(
         "/api/library/upload",
-        files={"file": (filename, b"\x00" * 16, "application/octet-stream")},
+        files={"files": (filename, b"\x00" * 16, "application/octet-stream")},
     ).json()
     confirmed = client.post(
         f"/api/library/drafts/{up['draft_id']}/confirm",

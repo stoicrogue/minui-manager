@@ -10,11 +10,20 @@
       (drop)="onDrop($event)"
     >
       <mat-icon>cloud_upload</mat-icon>
-      <p>Drag a ROM file here, or</p>
-      <input #fileInput type="file" (change)="onFileChosen($event)" hidden />
+      <p>Drag a ROM here — or a folder of disc files for multi-disk games — or</p>
+      <input
+        #fileInput
+        type="file"
+        multiple
+        (change)="onFileChosen($event)"
+        hidden
+      />
       <button mat-stroked-button type="button" (click)="fileInput.click()">
-        Choose file
+        Choose file(s)
       </button>
+      <p class="dropzone-hint">
+        Multi-disk: drop the whole folder, or pick all discs (and the .m3u) at once.
+      </p>
       @if (errorMessage()) {
         <p class="error">{{ errorMessage() }}</p>
       }
@@ -31,12 +40,23 @@
   @if (step() === 'review' || step() === 'confirming') {
     @if (upload(); as u) {
       <div class="file-info">
-        <mat-icon>insert_drive_file</mat-icon>
+        <mat-icon>{{ u.is_multi_disk ? 'album' : 'insert_drive_file' }}</mat-icon>
         <div>
           <strong>{{ u.original_filename }}</strong>
           <span class="size">{{ prettySize(u.size_bytes) }}</span>
+          @if (u.is_multi_disk) {
+            <span class="multi-badge">{{ u.disc_count }} discs</span>
+          }
         </div>
       </div>
+
+      @if (u.is_multi_disk) {
+        <ul class="disc-list">
+          @for (name of u.filenames; track name) {
+            <li><mat-icon>album</mat-icon><span>{{ name }}</span></li>
+          }
+        </ul>
+      }
 
       <mat-divider class="div"></mat-divider>
 

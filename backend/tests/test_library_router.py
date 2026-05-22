@@ -17,7 +17,7 @@ def test_upload_returns_draft_and_detection(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     r = client.post(
         "/api/library/upload",
-        files={"file": ("Pokemon Unbound (GBA).gba", b"\x00" * 32, "application/octet-stream")},
+        files={"files": ("Pokemon Unbound (GBA).gba", b"\x00" * 32, "application/octet-stream")},
     )
     assert r.status_code == 200
     body = r.json()
@@ -33,7 +33,7 @@ def test_upload_rejects_empty_file(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     r = client.post(
         "/api/library/upload",
-        files={"file": ("empty.gba", b"", "application/octet-stream")},
+        files={"files": ("empty.gba", b"", "application/octet-stream")},
     )
     assert r.status_code == 400
 
@@ -42,7 +42,7 @@ def test_confirm_creates_library_entry(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     upload = client.post(
         "/api/library/upload",
-        files={"file": ("Tetris.nes", b"\x00" * 16, "application/octet-stream")},
+        files={"files": ("Tetris.nes", b"\x00" * 16, "application/octet-stream")},
     ).json()
     draft_id = upload["draft_id"]
 
@@ -62,7 +62,7 @@ def test_confirm_rejects_unknown_system_code(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     upload = client.post(
         "/api/library/upload",
-        files={"file": ("x.nes", b"\x00", "application/octet-stream")},
+        files={"files": ("x.nes", b"\x00", "application/octet-stream")},
     ).json()
     r = client.post(
         f"/api/library/drafts/{upload['draft_id']}/confirm",
@@ -75,7 +75,7 @@ def test_confirm_409_on_duplicate(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     upload = client.post(
         "/api/library/upload",
-        files={"file": ("Tetris.nes", b"\x00", "application/octet-stream")},
+        files={"files": ("Tetris.nes", b"\x00", "application/octet-stream")},
     ).json()
     client.post(
         f"/api/library/drafts/{upload['draft_id']}/confirm",
@@ -85,7 +85,7 @@ def test_confirm_409_on_duplicate(tmp_project_root: Path) -> None:
     # Second upload with the same filename.
     upload2 = client.post(
         "/api/library/upload",
-        files={"file": ("Tetris.nes", b"\x00", "application/octet-stream")},
+        files={"files": ("Tetris.nes", b"\x00", "application/octet-stream")},
     ).json()
     r = client.post(
         f"/api/library/drafts/{upload2['draft_id']}/confirm",
@@ -99,7 +99,7 @@ def test_cancel_draft_removes_it(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     upload = client.post(
         "/api/library/upload",
-        files={"file": ("x.gb", b"\x00", "application/octet-stream")},
+        files={"files": ("x.gb", b"\x00", "application/octet-stream")},
     ).json()
     draft_id = upload["draft_id"]
     r = client.delete(f"/api/library/drafts/{draft_id}")
@@ -120,7 +120,7 @@ def test_list_library_returns_added_games(tmp_project_root: Path) -> None:
     ]:
         u = client.post(
             "/api/library/upload",
-            files={"file": (fn, b"\x00", "application/octet-stream")},
+            files={"files": (fn, b"\x00", "application/octet-stream")},
         ).json()
         client.post(
             f"/api/library/drafts/{u['draft_id']}/confirm",
@@ -145,7 +145,7 @@ def test_delete_library_entry(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     u = client.post(
         "/api/library/upload",
-        files={"file": ("Tetris.nes", b"\x00", "application/octet-stream")},
+        files={"files": ("Tetris.nes", b"\x00", "application/octet-stream")},
     ).json()
     created = client.post(
         f"/api/library/drafts/{u['draft_id']}/confirm",
@@ -164,7 +164,7 @@ def test_get_draft_info_recovers_detection(tmp_project_root: Path) -> None:
     client = _client(tmp_project_root)
     upload = client.post(
         "/api/library/upload",
-        files={"file": ("Pokemon Unbound (GBA).gba", b"\x00", "application/octet-stream")},
+        files={"files": ("Pokemon Unbound (GBA).gba", b"\x00", "application/octet-stream")},
     ).json()
     draft_id = upload["draft_id"]
 

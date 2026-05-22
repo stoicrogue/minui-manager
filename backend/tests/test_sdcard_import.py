@@ -57,13 +57,15 @@ def test_import_copies_rom_and_art_and_creates_row(
     with session_scope() as session:
         row = import_from_sd_card(session, fake_sd_card, load_systems(), "Tetris (FC)")
         # Capture values while still attached.
-        rom_path = row.library_path
+        folder = row.library_folder
+        disc_paths = row.disc_paths
         art_path = row.boxart_path
         display = row.display_name
         sys_code = row.system_code
 
-    assert rom_path == LIBRARY_DIR / "FC" / "Tetris.nes"
-    assert rom_path.is_file()
+    assert folder == LIBRARY_DIR / "FC" / "Tetris (FC)"
+    assert disc_paths == [folder / "Tetris.nes"]
+    assert disc_paths[0].is_file()
     assert art_path == LIBRARY_DIR / "FC" / ".res" / "Tetris (FC).png"
     assert art_path.is_file()
     assert display == "Tetris"
@@ -84,11 +86,13 @@ def test_import_without_box_art_succeeds(
 
     with session_scope() as session:
         row = import_from_sd_card(session, fake_sd_card, load_systems(), "Kirby (GB)")
-        rom_path = row.library_path
+        folder = row.library_folder
+        disc_paths = row.disc_paths
         art_path = row.boxart_path
 
-    assert rom_path == LIBRARY_DIR / "GB" / "Kirby.gb"
-    assert rom_path.is_file()
+    assert folder == LIBRARY_DIR / "GB" / "Kirby (GB)"
+    assert disc_paths == [folder / "Kirby.gb"]
+    assert disc_paths[0].is_file()
     # boxart_path is always computed; the file should not exist.
     assert art_path == LIBRARY_DIR / "GB" / ".res" / "Kirby (GB).png"
     assert not art_path.is_file()

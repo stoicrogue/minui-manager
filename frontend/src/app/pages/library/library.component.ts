@@ -14,6 +14,7 @@ import { LibraryGame, LibraryService } from '../../services/library.service';
 import { BoxartService } from '../../services/boxart.service';
 import { ArchiveService } from '../../services/archive.service';
 import { ArchivedGame } from '../../services/sdcard.service';
+import { collectFilesFromDrop } from '../../services/drop-folder.util';
 import { UploadDialogComponent } from './upload-dialog.component';
 import { BoxartPickerDialogComponent } from './boxart-picker-dialog.component';
 import { SendToDeviceDialogComponent } from './send-to-device-dialog.component';
@@ -146,9 +147,9 @@ export class LibraryComponent implements OnInit {
     });
   }
 
-  openUpload(initialFile?: File): void {
+  openUpload(initialFiles?: File[]): void {
     const ref = this.dialog.open(UploadDialogComponent, {
-      data: initialFile ? { initialFile } : null,
+      data: initialFiles && initialFiles.length > 0 ? { initialFiles } : null,
       maxWidth: '90vw',
       autoFocus: false,
     });
@@ -267,12 +268,21 @@ export class LibraryComponent implements OnInit {
     }
   }
 
-  onPageDrop(event: DragEvent): void {
+  async onPageDrop(event: DragEvent): Promise<void> {
     event.preventDefault();
     this.dragOver.set(false);
-    const file = event.dataTransfer?.files?.[0];
-    if (file) {
-      this.openUpload(file);
+    // Use webkitGetAsEntry to expand a dropped folder into its files,
+    // so dragging a multi-disk game folder onto the page works the same
+    // as opening the dialog and picking the files manually.
+    const items = event.dataTransfer?.items;
+    let files: File[] = [];
+    if (items && items.length > 0 && (items[0] as any).webkitGetAsEntry) {
+      files = await collectFilesFromDrop(items);
+    } else {
+      files = Array.from(event.dataTransfer?.files ?? []);
+    }
+    if (files.length > 0) {
+      this.openUpload(files);
     }
   }
 

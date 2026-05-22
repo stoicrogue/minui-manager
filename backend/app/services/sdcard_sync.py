@@ -73,6 +73,8 @@ class SyncPlanGame:
     has_boxart: bool
     boxart_missing_reason: str | None
     ops: list[SyncOp]
+    disc_filenames: list[str] = field(default_factory=list)
+    is_multi_disk: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -84,6 +86,8 @@ class SyncPlanGame:
             "is_replacement": self.is_replacement,
             "has_boxart": self.has_boxart,
             "boxart_missing_reason": self.boxart_missing_reason,
+            "disc_filenames": self.disc_filenames,
+            "is_multi_disk": self.is_multi_disk,
             "ops": [o.to_dict() for o in self.ops],
         }
 
@@ -184,6 +188,10 @@ class SyncResult:
 def _ops_for_game(game: LibraryGame, is_replacement: bool) -> tuple[list[SyncOp], bool, str | None]:
     """Compute the op list for one library game.
 
+    Multi-disk games emit one copy op per disc plus a single m3u write
+    listing all discs. Single-disk games emit a single copy + single-line
+    m3u — the existing behavior unchanged.
+
     Returns ``(ops, has_boxart, missing_reason)``.
     """
     folder_rel = f"Roms/{game.game_folder_name}"
@@ -200,22 +208,25 @@ def _ops_for_game(game: LibraryGame, is_replacement: bool) -> tuple[list[SyncOp]
 
     ops.append(SyncOp(action="mkdir", dest_rel=folder_rel))
 
-    rom_size = game.size_bytes
-    ops.append(
-        SyncOp(
-            action="copy",
-            dest_rel=f"{folder_rel}/{game.rom_filename}",
-            src=str(game.library_path),
-            size_bytes=rom_size,
+    discs = game.disc_filenames_list
+    for disc_filename, disc_path in zip(discs, game.disc_paths):
+        size = disc_path.stat().st_size if disc_path.is_file() else None
+        ops.append(
+            SyncOp(
+                action="copy",
+                dest_rel=f"{folder_rel}/{disc_filename}",
+                src=str(disc_path),
+                size_bytes=size,
+            )
         )
-    )
 
+    m3u_content = game.m3u_content
     ops.append(
         SyncOp(
             action="write_text",
             dest_rel=f"{folder_rel}/{game.game_folder_name}.m3u",
-            note=game.rom_filename,  # actual m3u content
-            size_bytes=len(game.rom_filename.encode("utf-8")),
+            note=m3u_content,
+            size_bytes=len(m3u_content.encode("utf-8")),
         )
     )
 
@@ -297,6 +308,8 @@ def plan_sync(
                 has_boxart=has_art,
                 boxart_missing_reason=missing_reason,
                 ops=ops,
+                disc_filenames=lg.disc_filenames_list,
+                is_multi_disk=lg.is_multi_disk,
             )
         )
 

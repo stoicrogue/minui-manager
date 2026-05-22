@@ -247,7 +247,7 @@ def test_restore_copies_rom_and_art_back_into_library(
     # Files are back in the library.
     from app.paths import LIBRARY_DIR
 
-    assert (LIBRARY_DIR / "GB" / "Tetris.gb").read_bytes() == b"ROMBYTES"
+    assert (LIBRARY_DIR / "GB" / "Tetris (GB)" / "Tetris.gb").read_bytes() == b"ROMBYTES"
     assert (LIBRARY_DIR / "GB" / ".res" / "Tetris (GB).png").is_file()
 
 

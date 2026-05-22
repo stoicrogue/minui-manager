@@ -21,6 +21,9 @@ export interface UploadResponse {
   draft_id: string;
   original_filename: string;
   size_bytes: number;
+  filenames: string[];
+  disc_count: number;
+  is_multi_disk: boolean;
   detection: SystemDetection;
 }
 
@@ -33,6 +36,9 @@ export interface LibraryGame {
   size_bytes: number;
   added_at: string;
   library_path: string;
+  disc_filenames: string[];
+  is_multi_disk: boolean;
+  disc_count: number;
   has_boxart: boolean;
   boxart_path: string | null;
 }
@@ -46,9 +52,17 @@ export interface LibraryListing {
 export class LibraryService {
   private readonly http = inject(HttpClient);
 
-  upload(file: File): Observable<UploadResponse> {
+  upload(files: File | File[]): Observable<UploadResponse> {
     const form = new FormData();
-    form.append('file', file);
+    const list = Array.isArray(files) ? files : [files];
+    for (const f of list) {
+      // FastAPI's list[UploadFile] takes the same field name repeated.
+      // `f.name` keeps the original filename (browsers strip path on
+      // single-file picks; folder drops give us the relative path which
+      // we collapse to basename here so it matches our safe-name rule).
+      const name = f.name.split(/[\\/]/).pop() ?? f.name;
+      form.append('files', f, name);
+    }
     return this.http.post<UploadResponse>('/api/library/upload', form);
   }
 

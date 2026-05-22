@@ -22,10 +22,15 @@ previous game is one click and saves come along for the ride.
 - **Library** — uploaded ROMs not currently on the card, with auto-detected
   system (parenthesized code → extension → preferred extension fallback) and
   an editable display name.
+- **Multi-disk uploads** — drag a whole game folder (or pick the discs + the
+  `.m3u` together) and the app treats it as one library entry. PS1 discs land
+  in a per-game folder with the `.m3u` regenerated alongside them; sync writes
+  every disc plus a fresh multi-line `.m3u` so MinUI's in-game disc swap works.
 - **Import from card** — pulls a game that's already on the SD card back into
-  the library in one click (ROM + box art). Lets you backfill the library from
-  a card you assembled by hand. Games already represented in the library show
-  as "Already in library" instead of offering the action.
+  the library in one click (ROM + box art, every disc for multi-disk games).
+  Lets you backfill the library from a card you assembled by hand. Games
+  already represented in the library show as "Already in library" instead of
+  offering the action.
 - **Box art lookup** — primary source is
   [libretro-thumbnails](https://github.com/libretro-thumbnails); fuzzy-matches
   the ROM filename and ranks the top candidates. Optional SteamGridDB as a
@@ -163,6 +168,10 @@ The full filesystem contract is in
 │   ├── Tetris (FC)/
 │   │   ├── Tetris.nes
 │   │   └── Tetris (FC).m3u                # one line: the ROM filename
+│   ├── Lunar - Silver Star Story (PS)/    # multi-disk: every disc + a
+│   │   ├── Lunar Disc 1.chd               #   multi-line .m3u driving
+│   │   ├── Lunar Disc 2.chd               #   MinUI's in-game swap
+│   │   └── Lunar - Silver Star Story (PS).m3u
 │   └── ...
 ├── Saves/<CODE>/<game-folder>.m3u.sav     # saves are bound to the .m3u basename
 └── (everything else is left untouched)
@@ -187,7 +196,7 @@ minui-manager/
 │   │                             system_detector, library_store, archive_store,
 │   │                             boxart_libretro, boxart_steamgriddb,
 │   │                             image_processor, library_backup, folder_picker
-│   └── tests/                    19 test modules covering the above
+│   └── tests/                    20 test modules covering the above
 ├── frontend/                     Angular 19 + Material (synthwave theme)
 │   └── src/app/
 │       ├── pages/                games, library, settings
@@ -206,10 +215,10 @@ archived games, `config.json`, `app.db`, and `sync.log`. It is gitignored.
 ## Status
 
 Phases 1–8 of the [project plan](./minui-game-manager-plan.md) are complete:
-SD card validation, library upload, system auto-detection, libretro and
-SteamGridDB box-art lookup, image normalization, send-to-device, remove with
-archive + restore, and library backup/restore. Manually verified end-to-end
-against a real Miyoo Mini Plus.
+SD card validation, library upload (single- or multi-disk), system
+auto-detection, libretro and SteamGridDB box-art lookup, image normalization,
+send-to-device, remove with archive + restore, and library backup/restore.
+Manually verified end-to-end against a real Miyoo Mini Plus.
 
 ## Caveats
 

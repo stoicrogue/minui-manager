@@ -70,9 +70,11 @@ def test_confirm_moves_file_and_writes_db_row(tmp_project_root: Path) -> None:
     assert row.rom_filename == "Tetris.nes"
     assert row.display_name == "Tetris"
     assert row.size_bytes == 3
-    # File now lives under <CODE>/, not _pending/.
-    assert row.library_path.is_file()
-    assert "_pending" not in str(row.library_path)
+    # ROM now lives under <CODE>/<game_folder>/, not _pending/.
+    assert row.library_folder.is_dir()
+    assert row.disc_paths == [row.library_folder / "Tetris.nes"]
+    assert row.disc_paths[0].is_file()
+    assert "_pending" not in str(row.library_folder)
 
 
 def test_confirm_rejects_unknown_draft(tmp_project_root: Path) -> None:
@@ -139,12 +141,12 @@ def test_delete_removes_row_and_file(tmp_project_root: Path) -> None:
     with session_scope() as session:
         row = store.confirm_draft(session, draft.draft_id, "FC", "Tetris")
         row_id = row.id
-        rom_path = row.library_path
-    assert rom_path.is_file()
+        game_folder = row.library_folder
+    assert game_folder.is_dir()
 
     with session_scope() as session:
         ok = store.delete_library_game(session, row_id)
     assert ok is True
-    assert not rom_path.exists()
+    assert not game_folder.exists()
     with session_scope() as session:
         assert store.get_library_game(session, row_id) is None

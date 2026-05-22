@@ -24,7 +24,14 @@ SAVES_DIR = "Saves"
 
 
 class SDCardGame(BaseModel):
-    """Live state for one game on the card. Not persisted."""
+    """Live state for one game on the card. Not persisted.
+
+    For single-disk games ``rom_filename`` is the only ROM and
+    ``disc_filenames`` has one element (the same name). For multi-disk
+    games the .m3u lists every disc; ``disc_filenames`` mirrors that list
+    in order, while ``rom_filename`` is the first disc (kept so callers
+    that only need *a* ROM still work).
+    """
 
     system_code: str
     game_folder_name: str
@@ -41,6 +48,8 @@ class SDCardGame(BaseModel):
     is_malformed: bool
     malformed_reason: str | None
     matches_library_id: int | None = None
+    disc_filenames: list[str] = []
+    is_multi_disk: bool = False
 
 
 class OrphanArt(BaseModel):
@@ -89,21 +98,29 @@ def _paths_for(sd_root: Path, game_folder: Path, system_code: str, rom_filename:
     )
 
 
-def _read_m3u(m3u_path: Path) -> str | None:
-    """Return the first non-empty, non-comment line from an .m3u file.
+def _read_m3u_lines(m3u_path: Path) -> list[str]:
+    """Return every non-empty, non-comment line from an .m3u file.
 
-    The Five-Game m3u format is a single line: the ROM's filename relative
-    to the game folder. Be tolerant of CRLF, BOM, and stray whitespace.
+    Single-disk games yield a one-element list (the ROM filename); multi-
+    disk games yield one entry per disc, in playback order. Tolerant of
+    CRLF, BOM, and stray whitespace.
     """
     try:
         text = m3u_path.read_text(encoding="utf-8-sig")
     except OSError:
-        return None
+        return []
+    lines: list[str] = []
     for raw in text.splitlines():
         line = raw.strip()
         if line and not line.startswith("#"):
-            return line
-    return None
+            lines.append(line)
+    return lines
+
+
+def _read_m3u(m3u_path: Path) -> str | None:
+    """Legacy single-line helper. Returns the first disc or None."""
+    lines = _read_m3u_lines(m3u_path)
+    return lines[0] if lines else None
 
 
 def scan_games(sd_root: Path, registry: SystemRegistry) -> list[SDCardGame]:
@@ -126,25 +143,34 @@ def scan_games(sd_root: Path, registry: SystemRegistry) -> list[SDCardGame]:
             continue
         display_name, system_code = parsed
 
-        rom_filename = _read_m3u(folder / f"{folder.name}.m3u")
+        m3u_path_candidate = folder / f"{folder.name}.m3u"
+        disc_filenames = _read_m3u_lines(m3u_path_candidate)
+        rom_filename = disc_filenames[0] if disc_filenames else None
         paths = _paths_for(sd_root, folder, system_code, rom_filename)
 
-        # Resolve ROM presence & malformed reason.
+        # Resolve ROM presence & malformed reason. For multi-disk we
+        # require every disc listed in the m3u to exist on disk; missing
+        # any one is malformed (the game wouldn't boot past the missing
+        # disc swap anyway).
         malformed_reasons: list[str] = []
+        rom_path: Path | None = None
+        has_rom = False
         if not paths.m3u.exists():
             malformed_reasons.append(f"missing {folder.name}.m3u")
-            has_rom = False
-            rom_path: Path | None = None
+        elif not disc_filenames:
+            malformed_reasons.append("m3u is empty")
         else:
-            if rom_filename is None:
-                malformed_reasons.append("m3u is empty")
-                has_rom = False
-                rom_path = None
-            else:
-                rom_path = folder / rom_filename
-                has_rom = rom_path.is_file()
-                if not has_rom:
-                    malformed_reasons.append(f"rom file '{rom_filename}' not found in folder")
+            rom_path = folder / rom_filename  # type: ignore[arg-type]
+            has_rom = rom_path.is_file()
+            if not has_rom:
+                malformed_reasons.append(
+                    f"rom file '{rom_filename}' not found in folder"
+                )
+            for disc in disc_filenames[1:]:
+                if not (folder / disc).is_file():
+                    malformed_reasons.append(
+                        f"disc '{disc}' listed in m3u but missing from folder"
+                    )
 
         has_boxart = paths.shared_art.is_file()
         save_path: Path | None = None
@@ -169,6 +195,8 @@ def scan_games(sd_root: Path, registry: SystemRegistry) -> list[SDCardGame]:
                 save_path=str(save_path) if save_path else None,
                 is_malformed=len(malformed_reasons) > 0,
                 malformed_reason="; ".join(malformed_reasons) if malformed_reasons else None,
+                disc_filenames=disc_filenames,
+                is_multi_disk=len(disc_filenames) > 1,
             )
         )
 

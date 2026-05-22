@@ -26,10 +26,13 @@ from app.services.library_store import (
     delete_library_game,
     get_draft,
     list_library,
-    save_pending_upload,
+    new_draft_dir,
+    safe_draft_filename,
 )
 from app.services.system_detector import SystemDetection, detect
 from app.services.system_registry import load_systems
+
+UPLOAD_CHUNK = 1024 * 1024  # 1 MiB
 
 router = APIRouter(prefix="/api/library", tags=["library"])
 
@@ -41,34 +44,88 @@ router = APIRouter(prefix="/api/library", tags=["library"])
 
 class UploadResponse(BaseModel):
     draft_id: str
-    original_filename: str
-    size_bytes: int
+    original_filename: str  # primary name (m3u stem or first ROM) — what detection ran on
+    size_bytes: int  # total across all uploaded files
+    filenames: list[str]  # every file we received, in upload order
+    disc_count: int
+    is_multi_disk: bool
     detection: SystemDetection
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_rom(file: Annotated[UploadFile, File()]) -> UploadResponse:
-    """Save the uploaded file as a draft, then run system detection on the
-    name. The frontend uses the result to pre-populate the confirm form.
+async def upload_rom(
+    files: Annotated[list[UploadFile], File(description="One ROM, or a folder's worth of files for multi-disk.")],
+) -> UploadResponse:
+    """Save uploaded file(s) as a draft and run system detection.
+
+    Single-file upload: same as before — one disc, single-disk game.
+    Multi-file upload: every file is saved under the draft folder. If an
+    .m3u is among them, its filename stem seeds detection (so the user's
+    display name auto-populates from "Lunar (PS).m3u" instead of "Disc 1");
+    otherwise we fall back to the first ROM's name. The .m3u itself isn't
+    promoted into the library — sync regenerates a canonical one at write
+    time.
+
+    Files are streamed in 1 MiB chunks straight to the draft folder so PS1
+    discs (~400 MB each) don't blow up the FastAPI process's memory.
 
     Nothing's committed to the DB or moved into the permanent library
     until ``POST /api/library/drafts/{id}/confirm``.
     """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename on the upload.")
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files in the upload.")
 
-    # The file IO is small (just bytes → disk); run it in a thread so
-    # we don't block the event loop on big ROMs.
-    draft = await asyncio.to_thread(save_pending_upload, file.filename, content)
+    draft_id, draft_dir = await asyncio.to_thread(new_draft_dir)
+    seen: set[str] = set()
+    total_bytes = 0
+    for uf in files:
+        if not uf.filename:
+            raise HTTPException(
+                status_code=400,
+                detail="One of the uploaded files has no filename.",
+            )
+        safe_name = safe_draft_filename(uf.filename)
+        if not safe_name:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Upload {uf.filename!r} resolved to an empty filename.",
+            )
+        if safe_name in seen:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Two uploaded files share the name {safe_name!r}. "
+                    "Rename one before retrying."
+                ),
+            )
+        seen.add(safe_name)
 
-    detection = detect(draft.original_filename, load_systems())
+        dest = draft_dir / safe_name
+        size = 0
+        with dest.open("wb") as out:
+            while chunk := await uf.read(UPLOAD_CHUNK):
+                out.write(chunk)
+                size += len(chunk)
+        if size == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Uploaded file {safe_name!r} is empty.",
+            )
+        total_bytes += size
+
+    draft = await asyncio.to_thread(get_draft, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=500, detail="Draft vanished after write.")
+
+    primary = draft.primary_filename
+    detection = detect(primary, load_systems())
     return UploadResponse(
-        draft_id=draft.draft_id,
-        original_filename=draft.original_filename,
-        size_bytes=draft.file_path.stat().st_size,
+        draft_id=draft_id,
+        original_filename=primary,
+        size_bytes=total_bytes,
+        filenames=[f.original_filename for f in draft.files],
+        disc_count=len(draft.disc_order()),
+        is_multi_disk=len(draft.disc_order()) > 1,
         detection=detection,
     )
 
@@ -117,7 +174,7 @@ def get_draft_info(draft_id: str) -> dict[str, object]:
     draft = get_draft(draft_id)
     if draft is None:
         raise HTTPException(status_code=404, detail="Draft not found.")
-    detection = detect(draft.original_filename, load_systems())
+    detection = detect(draft.primary_filename, load_systems())
     return {
         **draft.to_dict(),
         "detection": detection.model_dump(),
