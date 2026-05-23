@@ -3,7 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { ArchivedGame } from './sdcard.service';
-import { LibraryGame } from './library.service';
+
+export interface RestoreSaveResult {
+  restored: string[];
+  archive_path: string;
+  game_folder_name: string;
+  display_name: string;
+  system_code: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ArchiveService {
@@ -15,14 +22,16 @@ export class ArchiveService {
     return this.http.get<{ archived: ArchivedGame[] }>('/api/archive', { params });
   }
 
-  restoreToLibrary(archiveId: number): Observable<{ library_game: LibraryGame }> {
-    return this.http.post<{ library_game: LibraryGame }>(
-      `/api/archive/${archiveId}/restore-to-library`,
+  /** Copy the archived save file(s) back onto the SD card. The game must
+   * already be on the card — send it from the library first. */
+  restoreSaveToCard(archiveId: number): Observable<{ restored: RestoreSaveResult }> {
+    return this.http.post<{ restored: RestoreSaveResult }>(
+      `/api/archive/${archiveId}/restore-save-to-card`,
       {},
     );
   }
 
-  /** Permanently delete an archived game (DB row + on-disk bundle). */
+  /** Permanently delete an archive entry (DB row + on-disk save bundle). */
   delete(archiveId: number): Observable<{ deleted: ArchivedGame }> {
     return this.http.delete<{ deleted: ArchivedGame }>(`/api/archive/${archiveId}`);
   }

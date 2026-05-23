@@ -39,10 +39,12 @@ previous game is one click and saves come along for the ride.
   before it reaches the card.
 - **Send to device** — dry-run preview, then a single atomic copy that writes
   the ROM, the `.m3u`, and the box art into the exact MinUI Five-Game layout.
-- **Remove with archive** — removing a game from the card moves the ROM, the
-  `.m3u`, the box art, and any save (both `<game>.m3u.sav` and legacy
-  `<rom>.sav` patterns) into `./data/archive/<CODE>/<game>/<timestamp>/`.
-  Restore to the library in one click.
+- **Remove with archive** — removing a game from the card stashes any save
+  (both `<game>.m3u.sav` and legacy `<rom>.sav` patterns) in a timestamped
+  snapshot at `./data/archive/<CODE>/<game>/<timestamp>/`. The ROM and box
+  art are deleted from the card without backup — the library is the
+  canonical copy of both. Re-send the game from the library and click
+  *Restore save to card* to pick up where you left off.
 - **Library backup** — export the entire library as a zip; re-import a zip on a
   fresh machine.
 - **Safety rail** — all SD-card writes go through a `SafeSDCardWriter` that
@@ -70,7 +72,7 @@ previous game is one click and saves come along for the ride.
     </td>
     <td width="50%" align="center">
       <a href="./examples/archive.png"><img src="./examples/archive.png" alt="Archive panel" /></a><br />
-      <sub><strong>Archive</strong> — every game removed from the card lands here with its ROM, art, and save bundled in a timestamped folder. <em>Restore</em> copies it back to the library; the trash icon deletes a stale snapshot.</sub>
+      <sub><strong>Archive</strong> — every game removed from the card leaves a timestamped save snapshot here. Re-send the game from the library, then <em>Restore save to card</em> drops the old save back into place. The trash icon deletes a stale snapshot.</sub>
     </td>
   </tr>
 </table>

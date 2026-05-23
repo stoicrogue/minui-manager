@@ -108,18 +108,18 @@ export class LibraryComponent implements OnInit {
     });
   }
 
-  restoreFromArchive(item: ArchivedGame): void {
+  restoreSaveToCard(item: ArchivedGame): void {
     this.restoringId.set(item.id);
-    this.archive.restoreToLibrary(item.id).subscribe({
+    this.archive.restoreSaveToCard(item.id).subscribe({
       next: (r) => {
         this.restoringId.set(null);
-        const g = r.library_game;
+        const count = r.restored.restored.length;
+        const noun = count === 1 ? 'save' : 'saves';
         this.snack.open(
-          `${g.display_name} restored to the library.`,
+          `Restored ${count} ${noun} for ${item.display_name} to the card.`,
           undefined,
           { duration: 3000 },
         );
-        this.refresh();
       },
       error: (err) => {
         this.restoringId.set(null);

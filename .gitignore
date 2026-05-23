@@ -30,3 +30,7 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Local one-off scripts (prefix with _ to keep them out of version control)
+scripts/_*.py
+scripts/_*.ps1

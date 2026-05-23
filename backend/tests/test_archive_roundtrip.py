@@ -1,21 +1,19 @@
-"""Phase 7 archive roundtrip tests.
+"""Archive roundtrip tests — save-only model.
 
-The plan flags this as critical: tests first. Covers:
-    - Remove → archive contains rom + m3u + art + save (both formats).
-    - Card-side teardown (folder + art + save removed).
-    - Restore-to-library copies ROM + art into the library.
-    - Restore is idempotent; archive files survive a restore.
-    - Structured failure cases (missing game, missing archive files).
+The archive stores only save file(s); the library is the canonical backup
+for ROMs and box art. Covers:
+    - Remove → archive contains only the save(s); card is cleaned up.
+    - Archive entry has no save when the card didn't have one.
+    - Restore-save-to-card copies saves back into ``Saves/<CODE>/``.
+    - Restore preconditions: archive missing, no save, game not on card.
+    - Delete-archive removes the bundle + DB row.
 """
 
 from __future__ import annotations
 
-from io import BytesIO
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
-from PIL import Image
 
 
 # ---------------------------------------------------------------------------
@@ -27,12 +25,6 @@ def _client(tmp_project_root: Path) -> TestClient:
     from app.main import app
 
     return TestClient(app)
-
-
-def _png_bytes() -> bytes:
-    buf = BytesIO()
-    Image.new("RGB", (200, 300), "red").save(buf, format="PNG")
-    return buf.getvalue()
 
 
 def _set_sd(client: TestClient, sd: Path) -> None:
@@ -56,7 +48,7 @@ def _seed_card_with_game(
     (game_dir / f"{folder}.m3u").write_text(rom)
     if with_art:
         (sd / "Roms" / ".res").mkdir(parents=True, exist_ok=True)
-        (sd / "Roms" / ".res" / f"{folder}.png").write_bytes(_png_bytes())
+        (sd / "Roms" / ".res" / f"{folder}.png").write_bytes(b"PNGBYTES")
     saves_dir = sd / "Saves" / code
     saves_dir.mkdir(parents=True, exist_ok=True)
     if with_save_m3u:
@@ -66,15 +58,15 @@ def _seed_card_with_game(
 
 
 # ---------------------------------------------------------------------------
-# Remove → archive
+# Remove → archive (save-only)
 # ---------------------------------------------------------------------------
 
 
-def test_remove_archives_rom_m3u_art_and_save(
+def test_remove_archives_save_only_and_cleans_card(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
-    """Happy path: remove a fully-decked game, verify everything lands
-    in the archive and the card is cleaned up."""
+    """Happy path: a fully-decked game lands as a save-only archive,
+    and the card has the ROM folder + boxart + save removed."""
     _seed_card_with_game(
         fake_sd_card,
         with_art=True,
@@ -85,18 +77,17 @@ def test_remove_archives_rom_m3u_art_and_save(
 
     r = client.delete("/api/sdcard/games/Tetris (GB)")
     assert r.status_code == 200, r.text
-    body = r.json()
-    archived = body["archived"]
+    archived = r.json()["archived"]
     assert archived["game_folder_name"] == "Tetris (GB)"
     assert archived["has_save"] is True
-    assert archived["has_boxart"] is True
+    # has_boxart is always False under the save-only model.
+    assert archived["has_boxart"] is False
 
     archive_path = Path(archived["archive_path"])
-    # Folder structure inside the archive.
-    assert (archive_path / "Tetris (GB)" / "Tetris.gb").read_bytes() == b"ROMBYTES"
-    assert (archive_path / "Tetris (GB)" / "Tetris (GB).m3u").read_text() == "Tetris.gb"
-    assert (archive_path / "Tetris (GB).png").is_file()
+    # Only the save lives in the archive.
     assert (archive_path / "Tetris (GB).m3u.sav").read_bytes() == b"SAVE-M3U"
+    assert not (archive_path / "Tetris (GB)").exists()  # no ROM folder
+    assert not (archive_path / "Tetris (GB).png").exists()  # no boxart
 
     # Card is cleaned up.
     assert not (fake_sd_card / "Roms" / "Tetris (GB)").exists()
@@ -108,7 +99,7 @@ def test_remove_archives_both_save_formats(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
     """The reference card has both <game>.m3u.sav (current) and
-    <rom>.sav (legacy). Both must land in the archive."""
+    <rom>.sav (legacy). Both land in the archive."""
     _seed_card_with_game(
         fake_sd_card,
         folder="Pokemon Unbound (GBA)",
@@ -135,19 +126,31 @@ def test_remove_archives_both_save_formats(
     assert not (saves / "Pokemon Unbound (v2.1.1.1).gba.sav").exists()
 
 
-def test_remove_without_art_or_save_is_fine(
+def test_remove_without_save_skips_archive_directory(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
-    """A bare-bones game (no art, no save) still archives cleanly."""
-    _seed_card_with_game(fake_sd_card)  # no art, no saves
+    """A game with no save still archives the row but no on-disk bundle.
+
+    The card is still cleaned up; the archive entry just has has_save=False
+    and an empty (non-existent) archive folder. Lets the user see the
+    history without leaving empty timestamp folders behind.
+    """
+    _seed_card_with_game(fake_sd_card, with_art=True)  # boxart but no save
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
 
     r = client.delete("/api/sdcard/games/Tetris (GB)")
     assert r.status_code == 200, r.text
     archived = r.json()["archived"]
-    assert archived["has_boxart"] is False
     assert archived["has_save"] is False
+    assert archived["has_boxart"] is False
+
+    # No archive directory created — nothing to put in it.
+    assert not Path(archived["archive_path"]).exists()
+
+    # Card still cleaned up.
+    assert not (fake_sd_card / "Roms" / "Tetris (GB)").exists()
+    assert not (fake_sd_card / "Roms" / ".res" / "Tetris (GB).png").exists()
 
 
 def test_remove_404_when_game_not_on_card(
@@ -223,95 +226,193 @@ def test_archived_at_iso_string_has_utc_offset(
 
 
 # ---------------------------------------------------------------------------
-# Restore to library
+# Restore save to card
 # ---------------------------------------------------------------------------
 
 
-def test_restore_copies_rom_and_art_back_into_library(
+def _put_game_back_on_card(
+    sd: Path,
+    *,
+    folder: str = "Tetris (GB)",
+    rom: str = "Tetris.gb",
+) -> None:
+    """Simulate the user re-sending the game from the library to the card."""
+    game_dir = sd / "Roms" / folder
+    game_dir.mkdir(parents=True, exist_ok=True)
+    (game_dir / rom).write_bytes(b"ROMBYTES")
+    (game_dir / f"{folder}.m3u").write_text(rom)
+
+
+def test_restore_save_copies_back_to_card(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
-    _seed_card_with_game(fake_sd_card, with_art=True)
+    """Archive a game with a save, then re-seed the ROM on the card and
+    confirm the save lands in Saves/<CODE>/ on the card."""
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
 
-    removed = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
-    archive_id = removed["id"]
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
 
-    r = client.post(f"/api/archive/{archive_id}/restore-to-library")
+    # User sends the game back from the library — simulate by re-creating
+    # the folder on the card.
+    _put_game_back_on_card(fake_sd_card)
+
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
     assert r.status_code == 200, r.text
-    restored = r.json()["library_game"]
-    assert restored["system_code"] == "GB"
-    assert restored["rom_filename"] == "Tetris.gb"
-    assert restored["display_name"] == "Tetris"
+    payload = r.json()["restored"]
+    assert payload["game_folder_name"] == "Tetris (GB)"
+    assert payload["system_code"] == "GB"
+    assert "Saves/GB/Tetris (GB).m3u.sav" in payload["restored"]
 
-    # Files are back in the library.
-    from app.paths import LIBRARY_DIR
-
-    assert (LIBRARY_DIR / "GB" / "Tetris (GB)" / "Tetris.gb").read_bytes() == b"ROMBYTES"
-    assert (LIBRARY_DIR / "GB" / ".res" / "Tetris (GB).png").is_file()
+    # Save is back on the card.
+    save = fake_sd_card / "Saves" / "GB" / "Tetris (GB).m3u.sav"
+    assert save.read_bytes() == b"SAVE-M3U"
 
 
-def test_restore_is_idempotent_when_library_entry_already_exists(
+def test_restore_save_copies_both_formats(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
-    """Re-restoring (or restoring a game whose library entry already
-    exists) returns the existing entry without erroring. Files are
-    re-copied so a corrupted library file gets healed."""
-    _seed_card_with_game(fake_sd_card, with_art=True)
+    """Both .m3u.sav and the legacy <rom>.sav are restored together."""
+    _seed_card_with_game(
+        fake_sd_card,
+        folder="Pokemon (GBA)",
+        rom="pokemon.gba",
+        code="GBA",
+        with_save_m3u=True,
+        with_save_legacy=True,
+    )
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
 
-    removed = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    archived = client.delete("/api/sdcard/games/Pokemon (GBA)").json()["archived"]
+    _put_game_back_on_card(fake_sd_card, folder="Pokemon (GBA)", rom="pokemon.gba")
 
-    first = client.post(f"/api/archive/{removed['id']}/restore-to-library").json()
-    second = client.post(f"/api/archive/{removed['id']}/restore-to-library").json()
-    assert first["library_game"]["id"] == second["library_game"]["id"]
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r.status_code == 200, r.text
+    restored_paths = r.json()["restored"]["restored"]
+    assert "Saves/GBA/Pokemon (GBA).m3u.sav" in restored_paths
+    assert "Saves/GBA/pokemon.gba.sav" in restored_paths
+
+    saves = fake_sd_card / "Saves" / "GBA"
+    assert (saves / "Pokemon (GBA).m3u.sav").read_bytes() == b"SAVE-M3U"
+    assert (saves / "pokemon.gba.sav").read_bytes() == b"SAVE-LEGACY"
 
 
-def test_restore_does_not_destroy_archive_files(
+def test_restore_save_overwrites_existing_save_on_card(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
-    """The archive must still be intact after a restore so re-restore
-    or zip-and-backup workflows keep working."""
-    _seed_card_with_game(fake_sd_card, with_art=True, with_save_m3u=True)
+    """The user explicitly asked to restore — clobber whatever's there."""
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
 
-    removed = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
-    archive_path = Path(removed["archive_path"])
-    client.post(f"/api/archive/{removed['id']}/restore-to-library")
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    _put_game_back_on_card(fake_sd_card)
 
-    assert (archive_path / "Tetris (GB)" / "Tetris.gb").is_file()
-    assert (archive_path / "Tetris (GB).png").is_file()
+    # Stash a different save on the card before restoring.
+    (fake_sd_card / "Saves" / "GB").mkdir(parents=True, exist_ok=True)
+    (fake_sd_card / "Saves" / "GB" / "Tetris (GB).m3u.sav").write_bytes(b"NEWER")
+
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r.status_code == 200, r.text
+    assert (
+        fake_sd_card / "Saves" / "GB" / "Tetris (GB).m3u.sav"
+    ).read_bytes() == b"SAVE-M3U"
+
+
+def test_restore_save_is_repeatable_and_leaves_archive_intact(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """Re-restore: the archive must still hold the save, so it works twice."""
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    archive_path = Path(archived["archive_path"])
+    _put_game_back_on_card(fake_sd_card)
+
+    r1 = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r1.status_code == 200
+    r2 = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r2.status_code == 200
+
     assert (archive_path / "Tetris (GB).m3u.sav").is_file()
 
 
-def test_restore_410_when_archive_files_missing(
+def test_restore_save_404_when_archive_id_unknown(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
-    """If the user moved/deleted the archive folder, restore must fail
-    cleanly rather than half-restore an empty file."""
-    _seed_card_with_game(fake_sd_card)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+    r = client.post("/api/archive/9999/restore-save-to-card")
+    assert r.status_code == 404
+
+
+def test_restore_save_400_when_no_save_archived(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """An archive entry with has_save=False has nothing to restore."""
+    _seed_card_with_game(fake_sd_card)  # no save
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
 
-    removed = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
-    # Sabotage: wipe the archive contents.
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    _put_game_back_on_card(fake_sd_card)
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r.status_code == 400
+
+
+def test_restore_save_409_when_game_not_on_card(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """Without the game folder on the card the save has nothing to bind
+    to. The user should send the game from the library first."""
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    # Skip _put_game_back_on_card — game is NOT on the card.
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r.status_code == 409
+
+
+def test_restore_save_410_when_archive_files_missing(
+    tmp_project_root: Path, fake_sd_card: Path
+) -> None:
+    """If the user moved/deleted the archive directory behind the app's
+    back, restore must fail cleanly rather than half-restore."""
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
+    client = _client(tmp_project_root)
+    _set_sd(client, fake_sd_card)
+
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+    _put_game_back_on_card(fake_sd_card)
     import shutil
 
-    shutil.rmtree(Path(removed["archive_path"]))
+    shutil.rmtree(Path(archived["archive_path"]))
 
-    r = client.post(f"/api/archive/{removed['id']}/restore-to-library")
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
     assert r.status_code == 410
 
 
-def test_restore_404_when_archive_id_unknown(
+def test_restore_save_400_when_sd_card_not_ready(
     tmp_project_root: Path, fake_sd_card: Path
 ) -> None:
+    """No SD card configured → the precondition check rejects the call."""
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
-    r = client.post("/api/archive/9999/restore-to-library")
-    assert r.status_code == 404
+    archived = client.delete("/api/sdcard/games/Tetris (GB)").json()["archived"]
+
+    # Now clear the SD card setting.
+    r = client.patch("/api/settings", json={"sd_card_path": None})
+    assert r.status_code == 200
+
+    r = client.post(f"/api/archive/{archived['id']}/restore-save-to-card")
+    assert r.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +460,7 @@ def test_delete_archive_still_removes_row_when_dir_already_gone(
 ) -> None:
     """If the user wiped ./data/archive/... manually, deleting the entry
     should still clean up the orphan DB row (no resurrection)."""
-    _seed_card_with_game(fake_sd_card)
+    _seed_card_with_game(fake_sd_card, with_save_m3u=True)
     client = _client(tmp_project_root)
     _set_sd(client, fake_sd_card)
 
@@ -387,7 +488,9 @@ def test_delete_one_archive_leaves_sibling_archives_alone(
     _set_sd(client, fake_sd_card)
 
     # First cycle: seed → remove (archive #1).
-    _seed_card_with_game(fake_sd_card, folder="Chrono (SFC)", rom="Chrono.sfc", code="SFC")
+    _seed_card_with_game(
+        fake_sd_card, folder="Chrono (SFC)", rom="Chrono.sfc", code="SFC", with_save_m3u=True
+    )
     first = client.delete("/api/sdcard/games/Chrono (SFC)").json()["archived"]
 
     # Bump the wall clock a smidge so the timestamp suffix differs. Archive
@@ -395,7 +498,9 @@ def test_delete_one_archive_leaves_sibling_archives_alone(
     time.sleep(1.1)
 
     # Second cycle: re-seed → remove (archive #2).
-    _seed_card_with_game(fake_sd_card, folder="Chrono (SFC)", rom="Chrono.sfc", code="SFC")
+    _seed_card_with_game(
+        fake_sd_card, folder="Chrono (SFC)", rom="Chrono.sfc", code="SFC", with_save_m3u=True
+    )
     second = client.delete("/api/sdcard/games/Chrono (SFC)").json()["archived"]
 
     assert first["id"] != second["id"]

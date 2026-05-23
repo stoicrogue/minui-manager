@@ -151,13 +151,18 @@ class LibretroListingCache(Base):
 
 
 class ArchivedGame(Base):
-    """A game that was removed from the SD card and bundled into ./data/archive/.
+    """A snapshot of a game's save file(s) taken when it was removed from
+    the SD card.
 
-    Each row points at a timestamped archive directory on disk that
-    holds the ROM, .m3u, box art, and any save files that were on the
-    card at remove time. ``archive_relpath`` is relative to
-    :data:`app.paths._paths.ARCHIVE_DIR` so the archive remains valid if the
-    project root moves.
+    Each row points at a timestamped directory under ``./data/archive/``
+    that holds only the ``.sav`` file(s) that were on the card at remove
+    time. The library is the canonical backup for the ROM and box art.
+    ``archive_relpath`` is relative to :data:`app.paths.ARCHIVE_DIR` so
+    the archive remains valid if the project root moves.
+
+    ``has_boxart`` and ``disc_filenames`` are kept as columns to avoid a
+    migration, but the archive no longer carries either — both are
+    always falsy on new rows.
     """
 
     __tablename__ = "archived_games"
@@ -171,47 +176,13 @@ class ArchivedGame(Base):
     has_save: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     has_boxart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     archived_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
-    # JSON-encoded disc list, mirroring LibraryGame.disc_filenames. NULL =
-    # single-disk (fall back to [rom_filename]).
     disc_filenames: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-
-    @property
-    def disc_filenames_list(self) -> list[str]:
-        if not self.disc_filenames:
-            return [self.rom_filename] if self.rom_filename else []
-        try:
-            data = json.loads(self.disc_filenames)
-        except (json.JSONDecodeError, TypeError):
-            return [self.rom_filename] if self.rom_filename else []
-        if not isinstance(data, list) or not data:
-            return [self.rom_filename] if self.rom_filename else []
-        return [str(x) for x in data]
 
     @property
     def archive_path(self) -> Path:
         return _paths.ARCHIVE_DIR / self.archive_relpath
 
-    @property
-    def archived_game_folder(self) -> Path:
-        """The folder that holds the ROM(s) inside the archive directory."""
-        return self.archive_path / self.game_folder_name
-
-    @property
-    def archived_rom_path(self) -> Path:
-        """First disc's archived path (single-disk: the rom)."""
-        return self.archived_game_folder / self.rom_filename
-
-    @property
-    def archived_disc_paths(self) -> list[Path]:
-        folder = self.archived_game_folder
-        return [folder / disc for disc in self.disc_filenames_list]
-
-    @property
-    def archived_boxart_path(self) -> Path:
-        return self.archive_path / f"{self.game_folder_name}.png"
-
     def to_public_dict(self) -> dict[str, object]:
-        discs = self.disc_filenames_list
         return {
             "id": self.id,
             "system_code": self.system_code,
@@ -222,7 +193,5 @@ class ArchivedGame(Base):
             "archive_relpath": self.archive_relpath,
             "has_save": self.has_save,
             "has_boxart": self.has_boxart,
-            "disc_filenames": discs,
-            "is_multi_disk": len(discs) > 1,
             "archived_at": _iso_utc(self.archived_at),
         }

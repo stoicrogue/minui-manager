@@ -5,8 +5,8 @@
 
 <mat-dialog-content class="body">
   <p>
-    Permanently delete this archive snapshot. The on-disk bundle and the entry in the
-    list will both be removed. <strong>This can't be undone.</strong>
+    Permanently delete this archived save snapshot. The on-disk bundle and the entry in
+    the list will both be removed. <strong>This can't be undone.</strong>
   </p>
 
   <ul class="will-delete">
@@ -27,18 +27,11 @@
         <span class="value">Included in this snapshot — will be deleted.</span>
       </li>
     }
-    @if (data.item.has_boxart) {
-      <li>
-        <mat-icon>image</mat-icon>
-        <span class="label">Box art</span>
-        <span class="value">Included in this snapshot — will be deleted.</span>
-      </li>
-    }
   </ul>
 
   <p class="hint">
-    The ROM and box art currently in your library (if any) are <em>not</em> affected —
-    deleting an archive entry only removes this specific snapshot.
+    The ROM and box art in your library are <em>not</em> affected — the archive only
+    holds saves.
   </p>
 
   @if (errorMessage()) {

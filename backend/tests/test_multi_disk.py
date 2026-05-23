@@ -6,7 +6,7 @@ Covers the new flows added with multi-disk:
 - SD reader: parses every disc from a multi-line .m3u
 - Sync: writes every disc + an m3u listing them all
 - Import-from-card: pulls every disc back into the library
-- Archive + restore: round-trips multi-disk through ./data/archive/
+- Backup roundtrip: export + import preserves the multi-disk row
 """
 
 from __future__ import annotations
@@ -200,37 +200,6 @@ def test_import_from_card_copies_every_disc(
     imported = r.json()["imported"]
     assert imported["is_multi_disk"] is True
     assert imported["disc_filenames"] == ["Lunar Disc 1.chd", "Lunar Disc 2.chd"]
-
-    from app.paths import LIBRARY_DIR
-
-    folder = LIBRARY_DIR / "PS" / "Lunar (PS)"
-    assert (folder / "Lunar Disc 1.chd").read_bytes() == b"DISC1"
-    assert (folder / "Lunar Disc 2.chd").read_bytes() == b"DISC2"
-
-
-# ---------------------------------------------------------------------------
-# Archive + restore round-trip
-# ---------------------------------------------------------------------------
-
-
-def test_archive_and_restore_multi_disk(
-    tmp_project_root: Path, fake_sd_card: Path
-) -> None:
-    _make_multi_disk_card_game(fake_sd_card)
-    client = _client(tmp_project_root)
-    _set_sd(client, fake_sd_card)
-
-    # Archive (removes from card, drops a bundle into ./data/archive/).
-    archived = client.delete("/api/sdcard/games/Lunar (PS)").json()["archived"]
-    assert archived["is_multi_disk"] is True
-    assert archived["disc_filenames"] == ["Lunar Disc 1.chd", "Lunar Disc 2.chd"]
-
-    # Restore into library. Every disc should come back.
-    r = client.post(f"/api/archive/{archived['id']}/restore-to-library")
-    assert r.status_code == 200, r.text
-    restored = r.json()["library_game"]
-    assert restored["is_multi_disk"] is True
-    assert restored["disc_filenames"] == ["Lunar Disc 1.chd", "Lunar Disc 2.chd"]
 
     from app.paths import LIBRARY_DIR
 

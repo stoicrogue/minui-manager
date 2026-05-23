@@ -97,13 +97,14 @@
       <mat-card-header>
         <mat-card-title>Archive</mat-card-title>
         <mat-card-subtitle>
-          Games you've removed from the SD card. Click <em>Restore</em> to copy the ROM
-          and box art back into the library.
+          Saves from games you've removed from the SD card. Send the game back
+          from the library, then click <em>Restore save to card</em> to pick up
+          where you left off.
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         @if (archived().length === 0) {
-          <p class="archive-empty">Nothing archived yet. When you remove a game from the device, it lands here.</p>
+          <p class="archive-empty">Nothing archived yet. When you remove a game from the device, its save lands here.</p>
         } @else {
           <ul class="archive-list">
             @for (item of archived(); track item.id) {
@@ -112,9 +113,13 @@
                   <strong>{{ item.display_name }}</strong>
                   <mat-chip class="archive-code">{{ item.system_code }}</mat-chip>
                   @if (item.has_save) {
-                    <mat-chip class="archive-save" matTooltip="Save file archived too">
+                    <mat-chip class="archive-save" matTooltip="Save file archived">
                       <mat-icon matChipAvatar>save</mat-icon>
                       Save
+                    </mat-chip>
+                  } @else {
+                    <mat-chip class="archive-save" matTooltip="No save was on the card when this game was removed">
+                      No save
                     </mat-chip>
                   }
                   <span class="archive-when">{{ item.archived_at | date:'short' }}</span>
@@ -122,15 +127,16 @@
                 <div class="archive-actions">
                   <button
                     mat-stroked-button
-                    (click)="restoreFromArchive(item)"
-                    [disabled]="restoringId() !== null"
+                    (click)="restoreSaveToCard(item)"
+                    [disabled]="restoringId() !== null || !item.has_save"
+                    [matTooltip]="item.has_save ? 'Copy this save back to the card (game must already be on the card).' : 'No save was archived for this entry.'"
                   >
                     @if (restoringId() === item.id) {
                       <mat-progress-spinner mode="indeterminate" diameter="16"></mat-progress-spinner>
                     } @else {
                       <mat-icon>restore</mat-icon>
                     }
-                    Restore
+                    Restore save to card
                   </button>
                   <button
                     mat-icon-button
