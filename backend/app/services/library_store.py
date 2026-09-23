@@ -26,7 +26,7 @@ import logging
 import shutil
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -201,7 +201,9 @@ def new_draft_dir() -> tuple[str, Path]:
 
 def safe_draft_filename(filename: str) -> str:
     """Strip any path components from an upload's reported name."""
-    return Path(filename).name
+    # PureWindowsPath splits on both "/" and "\\"; plain Path on POSIX would
+    # keep "..\\evil.exe" as one name, so behavior would differ by host OS.
+    return PureWindowsPath(filename).name
 
 
 def save_pending_upload(filename: str, content: bytes) -> PendingUpload:
