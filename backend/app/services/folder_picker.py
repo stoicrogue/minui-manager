@@ -82,15 +82,21 @@ def open_folder_dialog(initial_dir: Path | None = None) -> str | None:
     if args is None:
         return None
 
+    # Force UTF-8 both ways: on Windows a piped child otherwise writes in the ANSI
+    # code page and dies on paths it can't encode, which would look like a cancel.
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     try:
-        result = subprocess.run(args, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            args, capture_output=True, text=True, encoding="utf-8", env=env, check=False
+        )
     except OSError as exc:  # pragma: no cover - depends on host install
         logger.warning("folder picker could not start: %s", exc)
         return None
 
     if result.returncode != 0:
-        # zenity/kdialog exit 1 on cancel; anything else is a real failure.
-        if result.returncode != 1:
+        # zenity/kdialog exit 1 on cancel, but so does a Python traceback in the Tk
+        # child (e.g. tkinter missing) — stderr tells the two apart.
+        if result.returncode != 1 or result.stderr.strip():
             logger.warning(
                 "folder picker exited with %s: %s", result.returncode, result.stderr.strip()
             )
