@@ -10,7 +10,7 @@ The SD card is treated as a destination, not as storage — the durable library
 and the archive of removed games live on the laptop, so swapping back to a
 previous game is one click and saves come along for the ride.
 
-> Single-user, runs locally, opinionated for a Windows host.
+> Single-user, runs locally. Windows-first; Linux works too.
 
 ## Features
 
@@ -48,9 +48,10 @@ previous game is one click and saves come along for the ride.
 - **Library backup** — export the entire library as a zip; re-import a zip on a
   fresh machine.
 - **Safety rail** — all SD-card writes go through a `SafeSDCardWriter` that
-  refuses any path outside `Roms/` and `Saves/<CODE>/`, and refuses path
-  traversal. The card's `.system/`, `.userdata/`, `Bios/`, `Emus/`,
-  `Roms_systems/`, and root files are never touched.
+  refuses any path outside `Roms/`; removals go through a `SafeSDCardRemover`
+  limited to `Roms/` and `Saves/`. Both refuse path traversal. The card's
+  `.system/`, `.userdata/`, `Bios/`, `Emus/`, `Roms_systems/`, and root files
+  are never touched.
 
 ## Screenshots
 
@@ -88,11 +89,15 @@ filesystem contract a backend invariant instead of a manual checklist.
 
 ## Requirements
 
-- Windows 10/11 (the `make.ps1` task runner assumes PowerShell; the bare
-  `Makefile` works on POSIX but isn't the primary path).
+- Windows 10/11 or Linux. Windows uses the `make.ps1` task runner
+  (PowerShell); Linux uses the `Makefile`. macOS is untested.
 - Python 3.10+.
-- Node 20+. The `make.ps1` script expects Node at `C:\nodejs\` — adjust the
+- Node 20+. On Windows, `make.ps1` expects Node at `C:\nodejs\` — adjust the
   `Use-Node` function near the top of `make.ps1` if yours lives elsewhere.
+- Linux only, for the Settings → **Browse…** folder picker: `zenity` or
+  `kdialog` (preferred), otherwise Python's `tkinter` (e.g. `python3-tk`). On
+  Wayland without `zenity` or `kdialog` no dialog is shown — type the SD path
+  instead.
 - A Miyoo Mini Plus with MinUI BASE + EXTRAS installed, configured for the
   Five Game Handheld / Game View layout, with its SD card plugged into the
   host machine.
@@ -102,22 +107,33 @@ filesystem contract a backend invariant instead of a manual checklist.
 One-time install (creates `.venv`, installs Python deps + Angular deps):
 
 ```powershell
-.\make.ps1 install
+.\make.ps1 install     # Windows
+```
+
+```sh
+make install          # Linux
 ```
 
 ## Run
 
 ```powershell
-.\make.ps1 run
+.\make.ps1 run         # Windows
+```
+
+```sh
+make run              # Linux
 ```
 
 That's it. The script builds the frontend bundle on first run (one-time cost
-of ~30s), starts FastAPI on `:8000` serving both the API and the built UI, and
-opens <http://localhost:8000> in your browser. `Ctrl-C` stops the server.
+of ~30s) and starts FastAPI on `:8000` serving both the API and the built UI.
+On Windows it also opens <http://localhost:8000> in your browser; on Linux,
+open it yourself. `Ctrl-C` stops the server.
 
-First-time use: open **Settings**, point it at your SD card root (e.g. `D:\`)
-using the native folder picker, and confirm the status reads `ok`. Optionally
-paste a SteamGridDB API key if you want it as a secondary box-art source.
+First-time use: open **Settings**, point it at your SD card root (e.g. `D:\`
+on Windows, or wherever the card is mounted on Linux, such as
+`/run/media/<user>/<card>`) using **Browse…** or by typing the path, and
+confirm the status reads `ok`. Optionally paste a SteamGridDB API key if you
+want it as a secondary box-art source.
 
 ### Dev mode (editing the UI)
 
@@ -132,6 +148,9 @@ backend and the Angular dev server in two terminals:
 .\make.ps1 frontend
 ```
 
+On Linux, use `make dev` for the backend and `cd frontend && npx ng serve`
+for the dev server.
+
 Then open <http://localhost:4200>. Backend OpenAPI docs are always at
 <http://localhost:8000/docs>.
 
@@ -141,7 +160,11 @@ Then open <http://localhost:4200>. Backend OpenAPI docs are always at
 git, rebuild explicitly:
 
 ```powershell
-.\make.ps1 build
+.\make.ps1 build       # Windows
+```
+
+```sh
+make build            # Linux
 ```
 
 ## Test
@@ -152,6 +175,9 @@ git, rebuild explicitly:
 .\make.ps1 lint          # ruff
 .\make.ps1 fmt           # ruff format
 ```
+
+On Linux the same targets are `make test`, `make build`, `make lint`, and
+`make fmt`.
 
 ## SD card layout (target)
 
@@ -202,8 +228,8 @@ minui-manager/
 │       └── services/             typed API clients
 ├── scripts/
 ├── data/                         user settings, library, archive (gitignored)
-├── make.ps1                      PowerShell task runner
-├── Makefile                      POSIX equivalent
+├── make.ps1                      PowerShell task runner (Windows)
+├── Makefile                      POSIX equivalent (Linux)
 └── pyproject.toml
 ```
 
@@ -216,6 +242,9 @@ Feature-complete and manually verified end-to-end against a real Miyoo Mini
 Plus: SD card validation, library upload (single- or multi-disk), system
 auto-detection, libretro and SteamGridDB box-art lookup, image normalization,
 send-to-device, remove with archive + restore, and library backup/restore.
+
+That end-to-end verification was done on Windows. Linux support is newer: the
+test suite passes there, but it has had less real-world use.
 
 ## Caveats
 
